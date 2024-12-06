@@ -1,1 +1,1 @@
-A terminal application for MCU debugging.
+A terminal application for Xjera MCU debugging.
