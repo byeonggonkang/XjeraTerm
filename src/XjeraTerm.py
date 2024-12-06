@@ -8,8 +8,9 @@ import serial.tools.list_ports
 import re
 from datetime import datetime
 import subprocess
+import updatemanager
 
-__version__ = "1.0.1"
+__version__ = "v1.0.1"
 
 def resource_path(relative_path):
     """PyInstaller에서 리소스 경로를 찾는 함수"""
@@ -79,9 +80,13 @@ class MainWindow(QMainWindow):
         self.buffer = ""  # 데이터 누적 버퍼
         self.userScrolled = False  # 사용자 스크롤 상태를 추적하는 플래그
         self.rxData.verticalScrollBar().valueChanged.connect(self.handleScroll)
+        self.check_updates_on_startup()  # 시작시 업데이트 확인
+
+    def check_updates_on_startup(self):
+        QTimer.singleShot(1000, updatemanager.check_for_updates)  # 1초 후 업데이트 확인
 
     def initUI(self):
-        self.setWindowTitle('X-jera Term')
+        self.setWindowTitle(f'X-jera Term {__version__}')
         self.setGeometry(0, 0, 1300, 1000)  # 창 크기를 1300x1000으로 설정
         self.move(QApplication.desktop().availableGeometry().topRight() - self.rect().topRight())  # 창을 화면 오른쪽으로 이동
 
@@ -779,8 +784,8 @@ class MainWindow(QMainWindow):
 
     def showVersionInfo(self):
         version_info = f"X-jera Term Version: {__version__}\n\n"
-        version_info += "1.0.0:\n- XjeraTerm 구현\n- 필터 Tx Favorite 추가\n"
-        version_info += f"{__version__}:\n- 필터 내 [ ] 와 같은 특수문자 처리 추가\n- 대량 데이터 처리시 버그 수정"
+        version_info += "v1.0.0:\n- XjeraTerm 구현\n- 필터 Tx Favorite 추가\n"
+        version_info += f"{__version__}:\n- 필터 내 [ ] 와 같은 특수문자 처리 추가\n- 대량 데이터 처리시 버그 수정\n- OnlineUpdate 추가\n"
         QMessageBox.information(self, "Version Info", version_info)
 
 if __name__ == '__main__':
