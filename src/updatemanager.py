@@ -5,7 +5,7 @@ import subprocess
 from PyQt5.QtWidgets import QMessageBox
 
 GITHUB_API_URL = "https://api.github.com/repos/byeonggonkang/XjeraTerm/releases/latest"
-CURRENT_VERSION = "1.0.1"
+CURRENT_VERSION = "v1.0.1"
 
 def check_for_updates():
     try:

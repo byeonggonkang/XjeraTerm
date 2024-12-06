@@ -10,7 +10,7 @@ from datetime import datetime
 import subprocess
 import updatemanager
 
-__version__ = "v1.0.1"
+__version__ = updatemanager.CURRENT_VERSION
 
 def resource_path(relative_path):
     """PyInstaller에서 리소스 경로를 찾는 함수"""
