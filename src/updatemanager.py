@@ -3,9 +3,10 @@ import sys
 import requests
 import subprocess
 from PyQt5.QtWidgets import QMessageBox
+from packaging import version  # version 비교를 위한 모듈 추가
 
 GITHUB_API_URL = "https://api.github.com/repos/byeonggonkang/XjeraTerm/releases/latest"
-CURRENT_VERSION = "v2.0.0"
+CURRENT_VERSION = "v2.0.1"
 
 def check_for_updates():
     try:
@@ -15,7 +16,9 @@ def check_for_updates():
         release_info = response.json()
 
         latest_version = release_info['tag_name']  # 최신 릴리스 태그 (예: v1.0.2)
-        if latest_version != CURRENT_VERSION:
+        
+        # 버전 비교 (v2.0.1과 v2.0.0이 올바르게 비교되도록)
+        if version.parse(latest_version.lstrip('v')) > version.parse(CURRENT_VERSION.lstrip('v')):
             # 최신 EXE 파일 URL 가져오기
             for asset in release_info['assets']:
                 if asset['name'].endswith(".exe"):
@@ -60,6 +63,3 @@ def download_and_install_update(download_url, latest_version):
 
     except Exception as e:
         QMessageBox.critical(None, "Update Failed", f"An error occurred while updating: {e}")
-
-
-

@@ -9,6 +9,7 @@ import re
 from datetime import datetime
 import subprocess
 import updatemanager
+import requests
 
 __version__ = updatemanager.CURRENT_VERSION
 
@@ -81,9 +82,73 @@ class MainWindow(QMainWindow):
         self.userScrolled = False  # 사용자 스크롤 상태를 추적하는 플래그
         self.rxData.verticalScrollBar().valueChanged.connect(self.handleScroll)
         self.check_updates_on_startup()  # 시작시 업데이트 확인
+        ## git 정보 설정
+        self.github_token = "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"
+        self.github_repo = "byeonggonkang/XjeraTerm"
 
     def check_updates_on_startup(self):
         QTimer.singleShot(1000, updatemanager.check_for_updates)  # 1초 후 업데이트 확인
+
+    def showReportDialog(self):
+            """Report Dialog 생성"""
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Report an Issue")
+
+            layout = QVBoxLayout(dialog)
+
+            # Input 필드 추가
+            issueTitleLabel = QLabel("Issue Title:")
+            self.issueTitleInput = QLineEdit()
+            layout.addWidget(issueTitleLabel)
+            layout.addWidget(self.issueTitleInput)
+
+            issueBodyLabel = QLabel("Issue Description:")
+            self.issueBodyInput = QTextEdit()
+            layout.addWidget(issueBodyLabel)
+            layout.addWidget(self.issueBodyInput)
+
+            # 버튼 추가
+            buttonLayout = QHBoxLayout()
+            sendButton = QPushButton("Send")
+            sendButton.clicked.connect(lambda: self.sendGitHubIssue(dialog))
+            cancelButton = QPushButton("Cancel")
+            cancelButton.clicked.connect(dialog.reject)
+            buttonLayout.addWidget(sendButton)
+            buttonLayout.addWidget(cancelButton)
+
+            layout.addLayout(buttonLayout)
+            dialog.setLayout(layout)
+            dialog.exec_()
+
+    def sendGitHubIssue(self, dialog):
+        """GitHub Issue 전송"""
+        issue_title = self.issueTitleInput.text()
+        issue_body = self.issueBodyInput.toPlainText()
+
+        if not issue_title.strip() or not issue_body.strip():
+            QMessageBox.warning(self, "Warning", "Please fill in both the title and description.")
+            return
+
+        # GitHub Issue 생성 API 호출
+        try:
+            headers = {
+                "Authorization": f"token {self.github_token}",
+                "Accept": "application/vnd.github.v3+json"
+            }
+            data = {
+                "title": issue_title,
+                "body": issue_body
+            }
+            url = f"https://api.github.com/repos/{self.github_repo}/issues"
+            response = requests.post(url, headers=headers, json=data)
+
+            if response.status_code == 201:
+                QMessageBox.information(self, "Success", "Your issue has been submitted!")
+                dialog.accept()
+            else:
+                QMessageBox.critical(self, "Error", f"Failed to submit the issue.\n{response.json().get('message', 'Unknown error')}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred: {e}")
 
     def initUI(self):
         self.setWindowTitle(f'X-jera Term {__version__}')
@@ -96,7 +161,12 @@ class MainWindow(QMainWindow):
         # 메뉴 생성
         menu = menubar.addMenu('Menu')
         settings = menubar.addMenu('Settings')
-        info = menubar.addMenu('Info')  # Info 메뉴 추가
+        info = menubar.addMenu('Info')
+        reportmenu = menubar.addMenu('Report!!')
+        reportAction = QAction('Report an Issue & Suggestion', self)
+        reportAction.triggered.connect(self.showReportDialog)
+        reportmenu.addAction(reportAction)
+        
 
         # 메뉴에 대한 액션 생성
         reconnectAction = QAction('Reconnect COM Port', self)
@@ -785,7 +855,8 @@ class MainWindow(QMainWindow):
     def showVersionInfo(self):
         version_info = f"X-jera Term Version: {__version__}\n\n"
         version_info += "v1.0.0:\n- XjeraTerm 구현\n- 필터 Tx Favorite 추가\n"
-        version_info += f"{__version__}:\n- 필터 내 [ ] 와 같은 특수문자 처리 추가\n- 대량 데이터 처리시 버그 수정\n- OnlineUpdate 추가\n"
+        version_info += f"v2.0.0:\n- 필터 내 [ ] 와 같은 특수문자 처리 추가\n- 대량 데이터 처리시 버그 수정\n- OnlineUpdate 추가\n"
+        version_info += "v2.0.1:\n- Issue & Suggest 메뉴 추가 \n"
         QMessageBox.information(self, "Version Info", version_info)
 
 if __name__ == '__main__':
