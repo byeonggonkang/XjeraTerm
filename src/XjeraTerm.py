@@ -10,6 +10,7 @@ from datetime import datetime
 import subprocess
 import updatemanager
 import requests
+import gittoken
 
 __version__ = updatemanager.CURRENT_VERSION
 
@@ -83,8 +84,8 @@ class MainWindow(QMainWindow):
         self.rxData.verticalScrollBar().valueChanged.connect(self.handleScroll)
         self.check_updates_on_startup()  # 시작시 업데이트 확인
         ## git 정보 설정
-        self.github_token = "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"
-        self.github_repo = "byeonggonkang/XjeraTerm"
+        self.github_token = gittoken.token
+        self.github_repo = gittoken.repo
 
     def check_updates_on_startup(self):
         QTimer.singleShot(1000, updatemanager.check_for_updates)  # 1초 후 업데이트 확인
