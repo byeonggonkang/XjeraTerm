@@ -10,10 +10,11 @@
 !CHANGELOG.md
 !README.md
 
-# src 디렉토리와 그 하위 파일들은 무시하지 않도록 포함
+# src 디렉토리와 Xjeraterm은 무시하지 않도록 포함
 !src/
-!src/**
-src/gittoken.py
+src/**
+!src/XjeraTerm.exe
+
 
 # dist 디렉토리와 그 하위 파일들은 무시하지 않도록 포함
 !dist/
