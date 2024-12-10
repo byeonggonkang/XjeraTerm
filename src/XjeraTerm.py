@@ -12,6 +12,7 @@ import updatemanager
 import requests
 import gittoken
 from PyQt5 import QtCore  # v2.0.3
+import ctypes  # Windows API를 사용하기 위해 추가 # v2.0.4
 
 __version__ = updatemanager.CURRENT_VERSION
 
@@ -88,6 +89,7 @@ class MainWindow(QMainWindow):
         self.github_token = gittoken.token
         self.github_repo = gittoken.repo
         self.installEventFilter(self)  # 이벤트 필터 설치 #v2.0.3
+        self.txInput.focusInEvent = self.setEnglishInputMode  # txInput에 포커스가 갈 때 입력 모드 변경 #v2.0.4
 
     def check_updates_on_startup(self):
         QTimer.singleShot(1000, updatemanager.check_for_updates)  # 1초 후 업데이트 확인
@@ -356,6 +358,12 @@ class MainWindow(QMainWindow):
     def focusTxInput(self, event):  # v2.0.3
         self.txInput.setFocus()
         QTextEdit.mousePressEvent(self.rxData, event)  # 기존 mousePressEvent 호출
+
+    def setEnglishInputMode(self, event): # v2.0.4
+        """txInput에 포커스가 갈 때 입력 모드를 영어로 변경"""
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+        ctypes.windll.user32.PostMessageW(hwnd, 0x0050, 0, 0x0409)  # 0x0409는 영어(미국) 키보드 레이아웃
+        QLineEdit.focusInEvent(self.txInput, event)  # 기존 focusInEvent 호출
 
     def updateFilterInputs(self):
         try:
@@ -875,7 +883,8 @@ class MainWindow(QMainWindow):
         version_info += "v1.0.0:\n- XjeraTerm 구현\n- 필터 Tx Favorite 추가\n"
         version_info += f"v2.0.0:\n- 필터 내 [ ] 와 같은 특수문자 처리 추가\n- 대량 데이터 처리시 버그 수정\n- OnlineUpdate 추가\n"
         version_info += "v2.0.1:\n- Issue & Suggest 메뉴 추가 \n"
-        version_info += "v2.0.3:\n- 사용자편의 증가를 위한 Focus 설정 추가\n"
+        version_info += "v2.0.3:\n- 사용자편의 증가를 위한 Focus 설정 추가 _report.Ryan\n"
+        version_info += "v2.0.4:\n- 사용자편의 증가를 위한 Txinputbox Language Set_report.Ryan\n"
         QMessageBox.information(self, "Version Info", version_info)
 
     def eventFilter(self, source, event): # v2.0.3
