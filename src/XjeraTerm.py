@@ -11,6 +11,7 @@ import subprocess
 import updatemanager
 import requests
 import gittoken
+from PyQt5 import QtCore  # v2.0.3
 
 __version__ = updatemanager.CURRENT_VERSION
 
@@ -86,6 +87,7 @@ class MainWindow(QMainWindow):
         ## git 정보 설정
         self.github_token = gittoken.token
         self.github_repo = gittoken.repo
+        self.installEventFilter(self)  # 이벤트 필터 설치 #v2.0.3
 
     def check_updates_on_startup(self):
         QTimer.singleShot(1000, updatemanager.check_for_updates)  # 1초 후 업데이트 확인
@@ -260,6 +262,7 @@ class MainWindow(QMainWindow):
         self.filteredRxData.setReadOnly(True)
         self.leftLayout.addLayout(filteredRxDataLayout)
         self.leftLayout.addWidget(self.filteredRxData)
+        self.filteredRxData.keyPressEvent = self.handleKeyPress  # RxData 영역에서 키 입력 처리 # v2.0.3
 
         for filterInput, filterCheckBox in self.filterInputs:
             filterInput.textChanged.connect(self.applyFilters)
@@ -269,6 +272,8 @@ class MainWindow(QMainWindow):
         rightLayout = QVBoxLayout()
         self.rxData = QTextEdit(self)
         self.rxData.setReadOnly(True)
+        self.rxData.mousePressEvent = self.focusTxInput  # RxData 영역 클릭 시 커서 이동 # v2.0.3
+        self.rxData.keyPressEvent = self.handleKeyPress  # RxData 영역에서 키 입력 처리 # v2.0.3
         rxDataLayout = QHBoxLayout()
         rxDataLabel = QLabel('Rx Data:')
         self.connectionStatusLabel = QLabel('', self)  # 연결 상태 레이블 추가
@@ -341,6 +346,17 @@ class MainWindow(QMainWindow):
         self.resizeEvent = self.saveWindowSettings
         self.moveEvent = self.saveWindowSettings
 
+    def handleKeyPress(self, event):  # v2.0.3
+        if event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
+            self.txInput.setFocus()
+            self.rxData.verticalScrollBar().setValue(self.rxData.verticalScrollBar().maximum())
+        else:
+            QTextEdit.keyPressEvent(self.rxData, event)  # 기존 keyPressEvent 호출
+
+    def focusTxInput(self, event):  # v2.0.3
+        self.txInput.setFocus()
+        QTextEdit.mousePressEvent(self.rxData, event)  # 기존 mousePressEvent 호출
+
     def updateFilterInputs(self):
         try:
             filterCount = int(self.filterCountInput.text())
@@ -405,6 +421,7 @@ class MainWindow(QMainWindow):
             txData = self.txInput.text() + '\r\n'
             self.serialPort.write(txData.encode('utf-8'))
             self.txInput.clear()
+            self.rxData.verticalScrollBar().setValue(self.rxData.verticalScrollBar().maximum()) # v2.0.3 Enter키 입력시 스크롤바 최하단으로 이동
             self.saveSettings()
 
     def sendFavoriteData(self, favoriteInput):
@@ -858,7 +875,13 @@ class MainWindow(QMainWindow):
         version_info += "v1.0.0:\n- XjeraTerm 구현\n- 필터 Tx Favorite 추가\n"
         version_info += f"v2.0.0:\n- 필터 내 [ ] 와 같은 특수문자 처리 추가\n- 대량 데이터 처리시 버그 수정\n- OnlineUpdate 추가\n"
         version_info += "v2.0.1:\n- Issue & Suggest 메뉴 추가 \n"
+        version_info += "v2.0.3:\n- 사용자편의 증가를 위한 Focus 설정 추가\n"
         QMessageBox.information(self, "Version Info", version_info)
+
+    def eventFilter(self, source, event): # v2.0.3
+        if event.type() == QtCore.QEvent.WindowActivate:
+            self.txInput.setFocus()  # 창이 활성화될 때 txInput에 포커스 설정
+        return super().eventFilter(source, event)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
