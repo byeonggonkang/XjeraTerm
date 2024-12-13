@@ -78,6 +78,7 @@ class MainWindow(QMainWindow):
         self.filteredData = []  # filteredData 속성 추가
         icon_path = resource_path('XjeraTerm.ico')
         self.setWindowIcon(QIcon(icon_path))
+        self.checkFirstRun()  # 첫 실행 여부 확인 및 업데이트 팝업 표시 # v2.0.5
         self.initUI()
         self.loadSettings()  # loadSettings를 initUI 이후에 호출
         self.connectSerialPort()
@@ -90,6 +91,27 @@ class MainWindow(QMainWindow):
         self.github_repo = gittoken.repo
         self.installEventFilter(self)  # 이벤트 필터 설치 #v2.0.3
         self.txInput.focusInEvent = self.setEnglishInputMode  # txInput에 포커스가 갈 때 입력 모드 변경 #v2.0.4
+
+    def checkFirstRun(self): # v2.0.5 ~
+        settings_path = os.path.join(os.path.dirname(sys.executable), 'env_set.txt')
+        first_run = True
+        
+        if os.path.exists(settings_path):
+            try:
+                with open(settings_path, 'r') as file:
+                    settings = {}
+                    for line in file:
+                        key, value = line.strip().split('=', 1)
+                        settings[key] = value
+                        print(f'{key}={value}')
+                    first_run = settings.get('Version') != updatemanager.CURRENT_VERSION
+                    print(f'first_run {first_run}')
+            except Exception as e:
+                print(f"Error reading settings file: {e}")
+                first_run = True
+        
+        if first_run:
+            self.showVersionInfo() # ~ v2.0.5
 
     def check_updates_on_startup(self):
         QTimer.singleShot(1000, updatemanager.check_for_updates)  # 1초 후 업데이트 확인
@@ -600,6 +622,7 @@ class MainWindow(QMainWindow):
 
     def saveSettings(self):
         settings = {
+            'Version': updatemanager.CURRENT_VERSION, #v2.0.5
             'port': self.port,
             'baud_rate': self.baudRate,
             'data_bits': self.dataBits,
@@ -831,13 +854,15 @@ class MainWindow(QMainWindow):
     def toggleTheme(self):
         if self.currentTheme == 'light':
             self.currentTheme = 'dark'
+        elif self.currentTheme == 'dark': #v2.0.5
+            self.currentTheme = 'gray' #v2.0.5
         else:
             self.currentTheme = 'light'
         self.applyTheme()
         self.saveSettings()
 
     def applyTheme(self):
-        if (self.currentTheme == 'dark'):
+        if self.currentTheme == 'dark':
             self.setStyleSheet("""
                 QMainWindow {
                     background-color: #000000;
@@ -863,6 +888,9 @@ class MainWindow(QMainWindow):
                     background-color: #1F1F1F;
                     color: #ffffff;
                 }
+                QMenu::item:selected {
+                    background-color: #3F3F3F;
+                }
                 QSplitter::handle {
                     background-color: #888888;
                     width: 10px;
@@ -875,16 +903,58 @@ class MainWindow(QMainWindow):
                     width: 100%;
                 }
             """)
+        elif self.currentTheme == 'gray': # v2.0.5
+            self.setStyleSheet("""
+                QMainWindow {
+                    background-color: #525252;
+                    color: #ffffff;
+                }
+                QMainWindow::title {
+                    background-color: #525252;
+                    color: #ffffff;
+                }
+                QTextEdit, QLineEdit, QLabel {
+                    background-color: #525252;
+                    color: #ffffff;
+                }
+                QPushButton, QComboBox {
+                    background-color: #3D3D3D;
+                    color: #ffffff;
+                }
+                QMenuBar {
+                    background-color: #D3D3D3;
+                    color: #000000;
+                }
+                QMenu, QAction {
+                    background-color: #3D3D3D;
+                    color: #ffffff;
+                }
+                QMenu::item:selected {
+                    background-color: #5D5D5D;
+                }
+                QSplitter::handle {
+                    background-color: #696969;
+                    width: 10px;
+                    border: 1px solid #000000;
+                }
+                QSplitter::handle:horizontal {
+                    height: 100%;
+                }
+                QSplitter::handle:vertical {
+                    width: 100%;
+                }
+            """)
         else:
             self.setStyleSheet("")
 
     def showVersionInfo(self):
-        version_info = f"X-jera Term Version: {__version__}\n\n"
-        version_info += "v1.0.0:\n- XjeraTerm 구현\n- 필터 Tx Favorite 추가\n"
-        version_info += f"v2.0.0:\n- 필터 내 [ ] 와 같은 특수문자 처리 추가\n- 대량 데이터 처리시 버그 수정\n- OnlineUpdate 추가\n"
-        version_info += "v2.0.1:\n- Issue & Suggest 메뉴 추가 \n"
-        version_info += "v2.0.3:\n- 사용자편의 증가를 위한 Focus 설정 추가 _report.Ryan\n"
-        version_info += "v2.0.4:\n- 사용자편의 증가를 위한 Txinputbox Language Set_report.Ryan\n"
+        version_info = f"X-jera Term Version: {__version__}\n\n\n"
+        version_info += "v2.0.5:\n- Toggle Theme 에 Gray 테마 추가_사용자요청사항\n\n"
+        version_info += "v2.0.4:\n- 사용자편의 증가를 위한 Txinputbox Language Set_report.Ryan\n\n"
+        version_info += "v2.0.3:\n- 사용자편의 증가를 위한 Focus 설정 추가 _report.Ryan\n\n"
+        version_info += "v2.0.1:\n- Issue & Suggest 메뉴 추가 \n\n"
+        version_info += "v2.0.0:\n- 필터 내 [ ] 와 같은 특수문자 처리 추가\n- 대량 데이터 처리시 버그 수정\n- OnlineUpdate 추가\n\n"
+        version_info += "v1.0.0:\n- XjeraTerm 구현\n- 필터 Tx Favorite 추가\n\n"
         QMessageBox.information(self, "Version Info", version_info)
 
     def eventFilter(self, source, event): # v2.0.3
