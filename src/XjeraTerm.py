@@ -1,6 +1,6 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMenuBar, QMenu, QAction, QVBoxLayout, QHBoxLayout, QWidget, QTextEdit, QLineEdit, QLabel, QSplitter, QFontDialog, QDialog, QFormLayout, QComboBox, QPushButton, QCheckBox, QGridLayout, QFileDialog, QMessageBox, QRadioButton
-from PyQt5.QtGui import QFont, QIntValidator, QIcon, QTextCursor
+from PyQt5.QtGui import QFont, QIntValidator, QIcon, QTextCursor, QTextCharFormat, QColor
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 import os
 import serial
@@ -17,6 +17,7 @@ from MCULOGDetectCanTrigger import MCULOGDetectCanTriggerDialog
 import logging
 from AlertFunc import AlertSettingsDialog
 from mcu_infogenerator import MCUinfomationDialog
+import ANSI_Escapecode
 
 # 디버그 로그 설정
 log_file_path = os.path.join(os.getenv('TEMP'), 'XjeraTerm_debug.log')
@@ -970,9 +971,9 @@ class MainWindow(QMainWindow):
 
             for line in lines[:-1]:
                 if line.strip():
-                    # self.rxData.moveCursor(QTextCursor.End)  # 커서를 텍스트 끝으로 이동
-                    self.rxData.append(f'[{timestamp}] {line.strip()}')
-                    self.filteredData.append(f'[{timestamp}] {line.strip()}')
+                    self.rxData.moveCursor(QTextCursor.End)  # 커서를 텍스트 끝으로 이동
+                    ANSI_Escapecode.appendFormattedText(self.rxData, f'[{timestamp}] {line.strip()}\n')
+                    self.filteredData.append(f'[{timestamp}] {line.strip()}\n')
                     if any(re.search(re.escape(filterInput.text()), line) and filterCheckBox.isChecked() for filterInput, filterCheckBox in self.filterInputs if filterInput.text() and filterCheckBox.isChecked()):
                         self.filteredRxData.append(f'[{timestamp}] {line.strip()}')
             
@@ -1179,6 +1180,8 @@ class MainWindow(QMainWindow):
         try:
             version_info_lines = [
                 f"X-jera Term Version: {__version__}\n\n\n",
+                "v4.0.1:\n\n  ModelSelect 삭제 ANSI Escape코드 적용 코드 추가 \n\n",
+                "v4.0.0:\n\n  KGM 로그 호환 추가 \n Settings - Prefrences - ModelSelect 에서 Chery or KGM 선택 \n KGM로그는 HTML 코드로 색상 표시 기능이있음 \n\n",
                 "v3.0.0:\n  TxData 입력시 Enter키 선 입력 추가\n debuglog 추가 \n 실험실 추가\n -MCU Information, LOG DETECT RESET(초기화이슈검증용), AlertSet(특정 로그 확인시 알람)  \nCtrl + C로 복사 기능 Fix (v2.0.3 Focus 설정 일부 롤백)\n\n",
                 "v2.0.5:\n  Toggle Theme 에 Gray 테마 추가_사용자요청사항\n\n",
                 "v2.0.4:\n  사용자편의 증가를 위한 Txinputbox Language Set_report.Ryan\n\n",
