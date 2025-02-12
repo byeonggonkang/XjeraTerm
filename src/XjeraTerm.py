@@ -17,7 +17,7 @@ from MCULOGDetectCanTrigger import MCULOGDetectCanTriggerDialog
 import logging
 from AlertFunc import AlertSettingsDialog
 from mcu_infogenerator import MCUinfomationDialog
-import ANSI_Escapecode
+from ANSI_Escapecode import appendFormattedText
 
 # 디버그 로그 설정
 log_file_path = os.path.join(os.getenv('TEMP'), 'XjeraTerm_debug.log')
@@ -972,10 +972,10 @@ class MainWindow(QMainWindow):
             for line in lines[:-1]:
                 if line.strip():
                     self.rxData.moveCursor(QTextCursor.End)  # 커서를 텍스트 끝으로 이동
-                    ANSI_Escapecode.appendFormattedText(self.rxData, f'[{timestamp}] {line.strip()}\n')
-                    self.filteredData.append(f'[{timestamp}] {line.strip()}\n')
+                    appendFormattedText(self.rxData, f'[{timestamp}] {line.strip()}\n')
+                    self.filteredData.append(f'[{timestamp}] {line.strip()}\n')  # 리스트에 추가
                     if any(re.search(re.escape(filterInput.text()), line) and filterCheckBox.isChecked() for filterInput, filterCheckBox in self.filterInputs if filterInput.text() and filterCheckBox.isChecked()):
-                        self.filteredRxData.append(f'[{timestamp}] {line.strip()}')
+                        appendFormattedText(self.filteredRxData, f'[{timestamp}] {line.strip()}\n')
             
             self.buffer = lines[-1]  # 미완성 줄은 다시 버퍼에 저장
 
@@ -986,9 +986,10 @@ class MainWindow(QMainWindow):
             # 자동 로깅
             if self.autoLogging:
                 self.autoLogBuffer += data
-                self.autoLogBuffer = self.autoLogBuffer.replace('\n\r', '\n')
-                logLines = self.autoLogBuffer.split('\n')
+                self.autoLogBuffer = self.autoLogBuffer.replace('\n\r', '\n') # Windows 스타일 줄바꿈을 통일
+                logLines = self.autoLogBuffer.split('\n') # \n을 기준으로 데이터 나누기
                 for logLine in logLines[:-1]:
+                    logLine = re.sub(r'\x1b\[[0-9;]*m', '', logLine)
                     self.autoLogFile.write(f'[{timestamp}] {logLine.strip()}\n')
                 self.autoLogBuffer = logLines[-1]
                 self.autoLogFile.flush()
