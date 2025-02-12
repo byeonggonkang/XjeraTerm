@@ -1181,6 +1181,7 @@ class MainWindow(QMainWindow):
         try:
             version_info_lines = [
                 f"X-jera Term Version: {__version__}\n\n\n",
+                "v4.0.2:\n\n  Filtered Rxdata Ansi 적용 및 로그에서 ansi 코드 제거후 저장 \n\n",
                 "v4.0.1:\n\n  ModelSelect 삭제 ANSI Escape코드 적용 코드 추가 \n\n",
                 "v4.0.0:\n\n  KGM 로그 호환 추가 \n Settings - Prefrences - ModelSelect 에서 Chery or KGM 선택 \n KGM로그는 HTML 코드로 색상 표시 기능이있음 \n\n",
                 "v3.0.0:\n  TxData 입력시 Enter키 선 입력 추가\n debuglog 추가 \n 실험실 추가\n -MCU Information, LOG DETECT RESET(초기화이슈검증용), AlertSet(특정 로그 확인시 알람)  \nCtrl + C로 복사 기능 Fix (v2.0.3 Focus 설정 일부 롤백)\n\n",
