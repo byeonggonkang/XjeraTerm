@@ -281,9 +281,17 @@ class MainWindow(QMainWindow):
             settings.addAction(logSettingsAction)
 
             # 테마 변경 액션 생성
-            themeAction = QAction('Toggle Theme', self)
-            themeAction.triggered.connect(self.toggleTheme)
-            settings.addAction(themeAction)
+            themeMenu = QMenu('Theme', self)
+            lightThemeAction = QAction('Light', self)
+            lightThemeAction.triggered.connect(lambda: self.setTheme('light'))
+            darkThemeAction = QAction('Dark', self)
+            darkThemeAction.triggered.connect(lambda: self.setTheme('dark'))
+            grayThemeAction = QAction('Gray', self)
+            grayThemeAction.triggered.connect(lambda: self.setTheme('gray'))
+            themeMenu.addAction(lightThemeAction)
+            themeMenu.addAction(darkThemeAction)
+            themeMenu.addAction(grayThemeAction)
+            settings.addMenu(themeMenu)
 
             # Info 메뉴에 대한 액션 생성
             versionInfoAction = QAction('Version Info', self)
@@ -537,15 +545,14 @@ class MainWindow(QMainWindow):
             logging.error(f"Error in sendFavoriteData: {e}")
 
     def showFontDialog(self):
-        try:
-            font, ok = QFontDialog.getFont()
-            if ok:
-                self.rxData.setFont(font)
-                self.fontFamily = font.family()
-                self.fontSize = font.pointSize()
-                self.saveSettings()
-        except Exception as e:
-            logging.error(f"Error in showFontDialog: {e}")
+        current_font = self.rxData.font()
+        font, ok = QFontDialog.getFont(current_font, self)
+        if ok:
+            self.rxData.setFont(font)
+            self.fontFamily = font.family()
+            self.fontSize = font.pointSize()
+            self.saveSettings()
+        
 
     def showPreferencesDialog(self):
         try:
@@ -961,28 +968,20 @@ class MainWindow(QMainWindow):
     ## mcu데이터 줄바꿈 \r\n 이지만 간혹 \n만 나오는경우있음. \r\n을 \n 으로 변경하여 줄바꿈을 통일 및 \n을 기준으로 데이터 나누기
     def updateRxData(self, data):
         try:
-            # logging.debug(f"Received data: {data}")
             timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-            # print(repr(data))
-            
             self.buffer += data  # 기존 버퍼에 새로운 데이터 추가
             self.buffer = self.buffer.replace('\n\r', '\n')  # Windows 스타일 줄바꿈을 통일
             lines = self.buffer.split('\n')  # \n을 기준으로 데이터 나누기
-
             for line in lines[:-1]:
                 if line.strip():
-                    self.rxData.moveCursor(QTextCursor.End)  # 커서를 텍스트 끝으로 이동
                     appendFormattedText(self.rxData, f'[{timestamp}] {line.strip()}\n')
                     self.filteredData.append(f'[{timestamp}] {line.strip()}\n')  # 리스트에 추가
                     if any(re.search(re.escape(filterInput.text()), line) and filterCheckBox.isChecked() for filterInput, filterCheckBox in self.filterInputs if filterInput.text() and filterCheckBox.isChecked()):
                         appendFormattedText(self.filteredRxData, f'[{timestamp}] {line.strip()}\n')
-            
             self.buffer = lines[-1]  # 미완성 줄은 다시 버퍼에 저장
-
             # 자동 스크롤 제어
             if not self.userScrolled:
                 self.rxData.verticalScrollBar().setValue(self.rxData.verticalScrollBar().maximum())
-
             # 자동 로깅
             if self.autoLogging:
                 self.autoLogBuffer += data
@@ -1075,18 +1074,10 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logging.error(f"Error in clearFilteredData: {e}")
 
-    def toggleTheme(self):
-        try:
-            if self.currentTheme == 'light':
-                self.currentTheme = 'dark'
-            elif self.currentTheme == 'dark': #v2.0.5
-                self.currentTheme = 'gray' #v2.0.5
-            else:
-                self.currentTheme = 'light'
-            self.applyTheme()
-            self.saveSettings()
-        except Exception as e:
-            logging.error(f"Error in toggleTheme: {e}")
+    def setTheme(self, theme):
+        self.currentTheme = theme
+        self.applyTheme()
+        self.saveSettings()
 
     def applyTheme(self):
         try:
@@ -1181,16 +1172,16 @@ class MainWindow(QMainWindow):
         try:
             version_info_lines = [
                 f"X-jera Term Version: {__version__}\n\n\n",
-                "v4.0.2:\n\n  Filtered Rxdata Ansi 적용 및 로그에서 ansi 코드 제거후 저장 \n\n",
+                "v4.0.2:\n\n  Filtered Rxdata Ansi 적용 및 로그에서 ansi 코드 제거후 저장 \n 스크롤 사이드 이슈 fix \n 테마변경 하위메뉴로 변경 \n\n",
                 "v4.0.1:\n\n  ModelSelect 삭제 ANSI Escape코드 적용 코드 추가 \n\n",
                 "v4.0.0:\n\n  KGM 로그 호환 추가 \n Settings - Prefrences - ModelSelect 에서 Chery or KGM 선택 \n KGM로그는 HTML 코드로 색상 표시 기능이있음 \n\n",
-                "v3.0.0:\n  TxData 입력시 Enter키 선 입력 추가\n debuglog 추가 \n 실험실 추가\n -MCU Information, LOG DETECT RESET(초기화이슈검증용), AlertSet(특정 로그 확인시 알람)  \nCtrl + C로 복사 기능 Fix (v2.0.3 Focus 설정 일부 롤백)\n\n",
-                "v2.0.5:\n  Toggle Theme 에 Gray 테마 추가_사용자요청사항\n\n",
-                "v2.0.4:\n  사용자편의 증가를 위한 Txinputbox Language Set_report.Ryan\n\n",
-                "v2.0.3:\n  사용자편의 증가를 위한 Focus 설정 추가 _report.Ryan\n\n",
-                "v2.0.1:\n  Issue & Suggest 메뉴 추가 \n\n",
-                "v2.0.0:\n  필터 내 [ ] 와 같은 특수문자 처리 추가\n- 대량 데이터 처리시 버그 수정\n- OnlineUpdate 추가\n\n",
-                "v1.0.0:\n  XjeraTerm 구현\n- 필터 Tx Favorite 추가\n\n"
+                "v3.0.0:\n\n  TxData 입력시 Enter키 선 입력 추가\n debuglog 추가 \n 실험실 추가\n -MCU Information, LOG DETECT RESET(초기화이슈검증용), AlertSet(특정 로그 확인시 알람)  \nCtrl + C로 복사 기능 Fix (v2.0.3 Focus 설정 일부 롤백)\n\n",
+                "v2.0.5:\n\n  Toggle Theme 에 Gray 테마 추가_사용자요청사항\n\n",
+                "v2.0.4:\n\n  사용자편의 증가를 위한 Txinputbox Language Set_report.Ryan\n\n",
+                "v2.0.3:\n\n  사용자편의 증가를 위한 Focus 설정 추가 _report.Ryan\n\n",
+                "v2.0.1:\n\n  Issue & Suggest 메뉴 추가 \n\n",
+                "v2.0.0:\n\n  필터 내 [ ] 와 같은 특수문자 처리 추가\n- 대량 데이터 처리시 버그 수정\n- OnlineUpdate 추가\n\n",
+                "v1.0.0:\n\n  XjeraTerm 구현\n- 필터 Tx Favorite 추가\n\n"
             ]
 
             version_info = "".join(version_info_lines)
