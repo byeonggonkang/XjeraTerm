@@ -18,6 +18,7 @@ import logging
 from AlertFunc import AlertSettingsDialog
 from mcu_infogenerator import MCUinfomationDialog
 from ANSI_Escapecode import appendFormattedText
+import webbrowser
 
 # 디버그 로그 설정
 log_file_path = os.path.join(os.getenv('TEMP'), 'XjeraTerm_debug.log')
@@ -88,7 +89,7 @@ class FilteredDataWindow(QMainWindow):
         except Exception as e:
             logging.error(f"Error in FilteredDataWindow closeEvent: {e}")
         event.accept()
-           
+
 class MainWindow(QMainWindow):
 
     def __init__(self):
@@ -110,14 +111,16 @@ class MainWindow(QMainWindow):
         self.connectSerialPort()
         self.buffer = ""  # 데이터 누적 버퍼
         self.userScrolled = False  # 사용자 스크롤 상태를 추적하는 플래그
+        self.userScrolled_filter = False  # 사용자 스크롤 상태를 추적하는 플래그 #v4.0.3 
         self.rxData.verticalScrollBar().valueChanged.connect(self.handleScroll)
+        self.filteredRxData.verticalScrollBar().valueChanged.connect(self.handleScroll_filter)  # 스크롤 이벤트 연결 #v4.0.3 
         self.check_updates_on_startup()  # 시작시 업데이트 확인
         ## git 정보 설정
         self.github_token = gittoken.token
         self.github_repo = gittoken.repo
         self.installEventFilter(self)  # 이벤트 필터 설치 #v2.0.3
         self.txInput.focusInEvent = self.setEnglishInputMode  # txInput에 포커스가 갈 때 입력 모드 변경 #v2.0.4
-
+        
     def checkFirstRun(self): # v2.0.5 ~
         settings_path = os.path.join(os.path.dirname(sys.executable), 'env_set.txt')
         first_run = True
@@ -297,6 +300,11 @@ class MainWindow(QMainWindow):
             versionInfoAction = QAction('Version Info', self)
             versionInfoAction.triggered.connect(self.showVersionInfo)
             info.addAction(versionInfoAction)
+
+            #v4.0.3 #2
+            visitGitHubAction = QAction('Visit GitHub', self)
+            visitGitHubAction.triggered.connect(self.visitGitHub)
+            info.addAction(visitGitHubAction)
 
             # 메인 레이아웃 생성
             mainLayout = QHBoxLayout()
@@ -978,6 +986,8 @@ class MainWindow(QMainWindow):
                     self.filteredData.append(f'[{timestamp}] {line.strip()}\n')  # 리스트에 추가
                     if any(re.search(re.escape(filterInput.text()), line) and filterCheckBox.isChecked() for filterInput, filterCheckBox in self.filterInputs if filterInput.text() and filterCheckBox.isChecked()):
                         appendFormattedText(self.filteredRxData, f'[{timestamp}] {line.strip()}\n')
+                        if not self.userScrolled_filter: #v4.0.3 
+                            self.filteredRxData.verticalScrollBar().setValue(self.filteredRxData.verticalScrollBar().maximum()) #v4.0.3 
             self.buffer = lines[-1]  # 미완성 줄은 다시 버퍼에 저장
             # 자동 스크롤 제어
             if not self.userScrolled:
@@ -1005,9 +1015,11 @@ class MainWindow(QMainWindow):
         try:
             max_value = self.rxData.verticalScrollBar().maximum()
             if value < max_value:
+                print(f'right{self.userScrolled}')#v4.0.3 
                 self.userScrolled = True
             else:
                 self.userScrolled = False
+                print(f'right{self.userScrolled}')#v4.0.3 
         except Exception as e:
             logging.error(f"Error in handleScroll: {e}")
 
@@ -1017,6 +1029,19 @@ class MainWindow(QMainWindow):
             self.filteredDataWindow.show()
         except Exception as e:
             logging.error(f"Error in showFilteredDataWindow: {e}")
+
+#v4.0.3 Filtered Data Window 스크롤 이벤트 추가
+    def handleScroll_filter(self, value):
+        try:
+            max_value = self.filteredRxData.verticalScrollBar().maximum()
+            if value < max_value:
+                print(f'filter{self.userScrolled_filter}')
+                self.userScrolled_filter = True
+            else:
+                print(f'filter{self.userScrolled_filter}')
+                self.userScrolled_filter = False
+        except Exception as e:
+            logging.error(f"Error in handleScroll: {e}")
 
     def saveLog(self):
         try:
@@ -1172,6 +1197,7 @@ class MainWindow(QMainWindow):
         try:
             version_info_lines = [
                 f"X-jera Term Version: {__version__}\n\n\n",
+                "v4.0.3:\n\n  #1_Filtered Data Window 스크롤 이벤트 추가\n  #2_Info > visitGitHub추가\n",
                 "v4.0.2:\n\n  Filtered Rxdata Ansi 적용 및 로그에서 ansi 코드 제거후 저장 \n 스크롤 사이드 이슈 fix \n 테마변경 하위메뉴로 변경 \n\n",
                 "v4.0.1:\n\n  ModelSelect 삭제 ANSI Escape코드 적용 코드 추가 \n\n",
                 "v4.0.0:\n\n  KGM 로그 호환 추가 \n Settings - Prefrences - ModelSelect 에서 Chery or KGM 선택 \n KGM로그는 HTML 코드로 색상 표시 기능이있음 \n\n",
@@ -1232,6 +1258,14 @@ class MainWindow(QMainWindow):
             self.MCUInformationDialog.show()
         except Exception as e:
             logging.error(f"Error in showMCUInformationDialog: {e}")
+
+#v4.0.3 #2
+    def visitGitHub(self):
+        try:
+            webbrowser.open('https://github.com/byeonggonkang/XjeraTerm')
+        except Exception as e:
+            logging.error(f"Error in visitGitHub: {e}")
+
             
 if __name__ == '__main__':
     try:
