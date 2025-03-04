@@ -1,6 +1,6 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMenuBar, QMenu, QAction, QVBoxLayout, QHBoxLayout, QWidget, QTextEdit, QLineEdit, QLabel, QSplitter, QFontDialog, QDialog, QFormLayout, QComboBox, QPushButton, QCheckBox, QGridLayout, QFileDialog, QMessageBox, QRadioButton
-from PyQt5.QtGui import QFont, QIntValidator, QIcon, QTextCursor, QTextCharFormat, QColor
+from PyQt5.QtGui import QFont, QIntValidator, QIcon, QTextCursor, QTextCharFormat, QColor, QFontDatabase
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 import os
 import serial
@@ -19,6 +19,7 @@ from AlertFunc import AlertSettingsDialog
 from mcu_infogenerator import MCUinfomationDialog
 from ANSI_Escapecode import appendFormattedText
 import webbrowser
+import ctypes
 
 # 디버그 로그 설정
 log_file_path = os.path.join(os.getenv('TEMP'), 'XjeraTerm_debug.log')
@@ -265,9 +266,14 @@ class MainWindow(QMainWindow):
             menu.addAction(exitAction)
 
             # 글꼴 액션 생성
-            fontAction = QAction('Font', self)
+            fontAction = QAction('Rxdata Font', self)
             fontAction.triggered.connect(self.showFontDialog)
             settings.addAction(fontAction)
+            
+            ## v4.0.4 소장님 컴퓨터 시스템폰트 작아짐 이슈 개선
+            sysfontAction = QAction('System Font', self)
+            sysfontAction.triggered.connect(self.showSystemFontDialog)
+            settings.addAction(sysfontAction)
 
             # 환경설정 액션 생성
             preferencesAction = QAction('SerialSettings', self)
@@ -431,8 +437,10 @@ class MainWindow(QMainWindow):
             self.snapLogFileName = "snap_Y-%m-%d%p%H_%M_%S.teralog"
             self.snapLogFolderPath = os.path.expanduser("~")
             self.autoLogging = False
-            self.fontFamily = "Terminal"
-            self.fontSize = 10
+            self.fontFamily = "Arial"
+            self.fontSize = 14
+            self.systemFontFamily = "Arial"
+            self.systemFontSize = 10
 
             self.currentTheme = 'light'  # 기본 테마 설정
             self.applyTheme()
@@ -560,7 +568,26 @@ class MainWindow(QMainWindow):
             self.fontFamily = font.family()
             self.fontSize = font.pointSize()
             self.saveSettings()
+            
+    def showSystemFontDialog(self): # v4.0.4
+        current_font = QApplication.font()
+        font, ok = QFontDialog.getFont(current_font, self)
+        if ok:
+            QApplication.setFont(font)
+            self.systemFontFamily = font.family()
+            self.systemFontSize = font.pointSize()
+            self.saveSettings()
+            self.updateFontForWidgets(self, font)
+
+    def updateFontForWidgets(self, widget, font): # v4.0.4
+        """재귀적으로 UI 위젯의 폰트를 변경 (RxData 제외)"""
+        if widget == self.rxData:  # RxData는 폰트 변경 제외
+            return
         
+        widget.setFont(font)  
+        for child in widget.findChildren(QWidget):
+            if child != self.rxData:  # RxData는 변경하지 않음
+                child.setFont(font)
 
     def showPreferencesDialog(self):
         try:
@@ -795,6 +822,8 @@ class MainWindow(QMainWindow):
                 'auto_logging': self.autoLogging,
                 'font_family': self.fontFamily,
                 'font_size': self.fontSize,
+                'systemfont_family': self.systemFontFamily, #v4.0.4
+                'systemfont_size': self.systemFontSize, #v4.0.4
                 'tx_favorite_1': self.txFavoriteInputs[0].text(),
                 'tx_favorite_2': self.txFavoriteInputs[1].text(),
                 'tx_favorite_3': self.txFavoriteInputs[2].text(),
@@ -840,8 +869,10 @@ class MainWindow(QMainWindow):
                     self.snapLogFileName = settings.get('snap_log_file_name', 'snap_%Y-%m-%d%p%H_%M_%S.teralog')
                     self.snapLogFolderPath = os.path.expandvars(settings.get('snap_log_folder_path', os.path.expanduser("~")))
                     self.autoLogging = settings.get('auto_logging', 'False') == 'True'
-                    self.fontFamily = settings.get('font_family', 'Terminal')
-                    self.fontSize = int(settings.get('font_size', '10'))
+                    self.fontFamily = settings.get('font_family', 'Arial')
+                    self.fontSize = int(settings.get('font_size', '14'))
+                    self.systemFontFamily = settings.get('systemfont_family', 'Arial') #v4.0.4
+                    self.systemFontSize = int(settings.get('systemfont_size', '10')) #v4.0.4
                     self.txFavoriteInputs[0].setText(settings.get('tx_favorite_1', ''))
                     self.txFavoriteInputs[1].setText(settings.get('tx_favorite_2', ''))
                     self.txFavoriteInputs[2].setText(settings.get('tx_favorite_3', ''))
@@ -882,8 +913,10 @@ class MainWindow(QMainWindow):
                 self.snapLogFileName = 'snap_%Y-%m-%d%p%H_%M_%S.teralog'
                 self.snapLogFolderPath = os.path.expanduser("~")
                 self.autoLogging = False
-                self.fontFamily = 'Terminal'
+                self.fontFamily = 'Arial'
                 self.fontSize = 14
+                self.systemFontFamily = 'Arial'
+                self.systemFontSize = 10
                 self.currentTheme = 'light'
                 self.filterCountInput.setText('3')
                 self.canch_entry.setText('1')
@@ -899,6 +932,7 @@ class MainWindow(QMainWindow):
                     filterCheckBox.setChecked(True)
 
             self.rxData.setFont(QFont(self.fontFamily, self.fontSize))
+            QApplication.setFont(QFont(self.systemFontFamily, self.systemFontSize)) #v4.0.4
             self.applyTheme()
         except Exception as e:
             logging.error(f"Error in loadSettings: {e}")
@@ -1197,7 +1231,8 @@ class MainWindow(QMainWindow):
         try:
             version_info_lines = [
                 f"X-jera Term Version: {__version__}\n\n\n",
-                "v4.0.3:\n\n  #1_Filtered Data Window 스크롤 이벤트 추가\n  #2_Info > visitGitHub추가\n",
+                "v4.0.4:\n\n  #1_시스템 폰트 설정메뉴 추가\n\n",
+                "v4.0.3:\n\n  #1_Filtered Data Window 스크롤 이벤트 추가\n  #2_Info > visitGitHub추가\n\n",
                 "v4.0.2:\n\n  Filtered Rxdata Ansi 적용 및 로그에서 ansi 코드 제거후 저장 \n 스크롤 사이드 이슈 fix \n 테마변경 하위메뉴로 변경 \n\n",
                 "v4.0.1:\n\n  ModelSelect 삭제 ANSI Escape코드 적용 코드 추가 \n\n",
                 "v4.0.0:\n\n  KGM 로그 호환 추가 \n Settings - Prefrences - ModelSelect 에서 Chery or KGM 선택 \n KGM로그는 HTML 코드로 색상 표시 기능이있음 \n\n",
@@ -1270,7 +1305,22 @@ class MainWindow(QMainWindow):
 if __name__ == '__main__':
     try:
         logging.debug("Starting application")
+        
+        ##v4.0.4 소장님 컴퓨터 시스템 폰트 작아지는 문제 해결
+        
+                # DPI 스케일링 활성화
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # Windows 8.1 이상 DPI 설정
+        
         app = QApplication(sys.argv)
+                # Qt의 고해상도 DPI 설정
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
+        
+                # 기본 폰트 설정
+        default_font = QFontDatabase.systemFont(QFontDatabase.GeneralFont)
+        default_font.setPointSize(12)  # 원하는 크기로 조절
+        app.setFont(default_font)
+        
         mainWindow = MainWindow()
         mainWindow.show()
         sys.exit(app.exec_())
