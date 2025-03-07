@@ -1,7 +1,7 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QMenuBar, QMenu, QAction, QVBoxLayout, QHBoxLayout, QWidget, QTextEdit, QLineEdit, QLabel, QSplitter, QFontDialog, QDialog, QFormLayout, QComboBox, QPushButton, QCheckBox, QGridLayout, QFileDialog, QMessageBox, QRadioButton
-from PyQt5.QtGui import QFont, QIntValidator, QIcon, QTextCursor, QTextCharFormat, QColor, QFontDatabase
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PyQt6.QtWidgets import QApplication, QMainWindow, QMenu, QVBoxLayout, QHBoxLayout, QWidget, QTextEdit, QLineEdit, QLabel, QSplitter, QFontDialog, QDialog, QFormLayout, QComboBox, QPushButton, QCheckBox, QGridLayout, QFileDialog, QMessageBox
+from PyQt6.QtGui import QFont, QIntValidator, QIcon, QFontDatabase, QAction
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 import os
 import serial
 import serial.tools.list_ports
@@ -11,7 +11,7 @@ import subprocess
 import updatemanager
 import requests
 import gittoken
-from PyQt5 import QtCore  # v2.0.3
+# from PyQt6 import QtCore  # v2.0.3
 import ctypes  # Windows API를 사용하기 위해 추가 # v2.0.4
 from MCULOGDetectCanTrigger import MCULOGDetectCanTriggerDialog
 import logging
@@ -98,9 +98,6 @@ class MainWindow(QMainWindow):
         logging.debug("Initializing MainWindow")
         self.filteredData = []  # filteredData 속성 추가
         self.processedData = []  # 처리된 데이터를 저장할 리스트
-        self.canch_entry = QLineEdit(self)  # canch_entry 속성 추가
-        self.bustype_entry = QComboBox(self)  # bustype_entry 속성 추가
-        self.bustype_entry.addItems(["vector", "kvaser"])  # bustype_entry 초기화
         icon_path = resource_path('XjeraTerm.ico')
         self.setWindowIcon(QIcon(icon_path))
         self.checkFirstRun()  # 첫 실행 여부 확인 및 업데이트 팝업 표시 # v2.0.5
@@ -108,11 +105,15 @@ class MainWindow(QMainWindow):
         self.MCULOGDetectCanTriggerDialog = MCULOGDetectCanTriggerDialog(self)  # 인스턴스 초기화
         self.alertSettingsDialog = AlertSettingsDialog(self)  # 인스턴스 초기화
         self.MCUInformationDialog = None  # 인스턴스 초기화 제거
+        self.canch_entry_value = None  # CAN Channel
+        self.bustype_entry_value = None  # CAN Bus Type
         self.loadSettings()  # loadSettings를 initUI 이후에 호출
         self.connectSerialPort()
         self.buffer = ""  # 데이터 누적 버퍼
         self.userScrolled = False  # 사용자 스크롤 상태를 추적하는 플래그
         self.userScrolled_filter = False  # 사용자 스크롤 상태를 추적하는 플래그 #v4.0.3 
+        self.txHistory = []  # 이전 입력 메시지 저장 리스트 #4.0.5 #1
+        self.txHistoryIndex = -1  # 현재 선택된 히스토리 위치 (-1은 새 입력 상태) #4.0.5 #1
         self.rxData.verticalScrollBar().valueChanged.connect(self.handleScroll)
         self.filteredRxData.verticalScrollBar().valueChanged.connect(self.handleScroll_filter)  # 스크롤 이벤트 연결 #v4.0.3 
         self.check_updates_on_startup()  # 시작시 업데이트 확인
@@ -121,6 +122,7 @@ class MainWindow(QMainWindow):
         self.github_repo = gittoken.repo
         self.installEventFilter(self)  # 이벤트 필터 설치 #v2.0.3
         self.txInput.focusInEvent = self.setEnglishInputMode  # txInput에 포커스가 갈 때 입력 모드 변경 #v2.0.4
+
         
     def checkFirstRun(self): # v2.0.5 ~
         settings_path = os.path.join(os.path.dirname(sys.executable), 'env_set.txt')
@@ -180,7 +182,7 @@ class MainWindow(QMainWindow):
 
             layout.addLayout(buttonLayout)
             dialog.setLayout(layout)
-            dialog.exec_()
+            dialog.exec()
         except Exception as e:
             logging.error(f"Error in showReportDialog: {e}")
 
@@ -219,7 +221,7 @@ class MainWindow(QMainWindow):
         try:
             self.setWindowTitle(f'X-jera Term {__version__}')
             self.setGeometry(0, 0, 1300, 1000)  # 창 크기를 1300x1000으로 설정
-            self.move(QApplication.desktop().availableGeometry().topRight() - self.rect().topRight())  # 창을 화면 오른쪽으로 이동
+            self.move(QApplication.primaryScreen().availableGeometry().topRight() - self.rect().topRight())  # 창을 화면 오른쪽으로 이동
 
             # 메뉴 바 생성
             menubar = self.menuBar()
@@ -232,8 +234,8 @@ class MainWindow(QMainWindow):
             reportAction = QAction('Report an Issue & Suggestion', self)
             reportAction.triggered.connect(self.showReportDialog)
             reportmenu.addAction(reportAction)
-
-            # # 추가 기능 메뉴
+                      
+            # 추가 기능 메뉴
             AdditionalFeaturesmenu = menubar.addMenu('실험실')
 
             # # 추가 기능 액션 생성
@@ -259,10 +261,14 @@ class MainWindow(QMainWindow):
             viewLogsAction.triggered.connect(self.viewLogDirectory)
             exitAction = QAction('Exit', self)
             exitAction.triggered.connect(self.close)
+            # Filtered Rx Data Export 메뉴 추가
+            exportFilteredDataAction = QAction('Export Filtered Rx Data', self)
+            exportFilteredDataAction.triggered.connect(self.exportFilteredData)
 
             menu.addAction(reconnectAction)
             menu.addAction(loggingAction)
             menu.addAction(viewLogsAction)
+            menu.addAction(exportFilteredDataAction)
             menu.addAction(exitAction)
 
             # 글꼴 액션 생성
@@ -407,7 +413,7 @@ class MainWindow(QMainWindow):
             rightLayout.addWidget(self.txInput)
 
             # 크기 조정을 허용하는 스플리터 생성
-            splitter = QSplitter(Qt.Horizontal)
+            splitter = QSplitter(Qt.Orientation.Horizontal)
             leftWidget = QWidget()
             leftWidget.setLayout(self.leftLayout)
             rightWidget = QWidget()
@@ -451,15 +457,72 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logging.error(f"Error in initUI: {e}")
 
-    def handleKeyPress(self, event):  # v2.0.3
-        try:
-            if (event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter):
-                self.txInput.setFocus()
-                self.rxData.verticalScrollBar().setValue(self.rxData.verticalScrollBar().maximum())
-            else:
-                QTextEdit.keyPressEvent(self.rxData, event)  # 기존 keyPressEvent 호출
-        except Exception as e:
-            logging.error(f"Error in handleKeyPress: {e}")
+    ### v4.0.5 #1 handleKeyPress 함수 변경
+    
+    # def handleKeyPress(self, event):  # v2.0.3
+    #     try:
+    #         if (event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter):
+    #             self.txInput.setFocus()
+    #             self.rxData.verticalScrollBar().setValue(self.rxData.verticalScrollBar().maximum())
+    #         else:
+    #             QTextEdit.keyPressEvent(self.rxData, event)  # 기존 keyPressEvent 호출
+    #     except Exception as e:
+    #         logging.error(f"Error in handleKeyPress: {e}")
+            
+    def handleKeyPress(self, event):  # v4.0.5 #1
+        """방향키(↑, ↓)로 TxInput의 입력 히스토리를 탐색"""
+        if self.txInput.hasFocus():  # Tx 입력 박스에서만 동작
+            print("focusedtxInput")
+            
+            if event.key() == Qt.Key.Key_Up:  # 위 방향키 ↑
+                if self.txHistory and self.txHistoryIndex < len(self.txHistory) - 1:
+                    if self.txHistoryIndex == -1:  # 새 입력이면 마지막 히스토리 선택
+                        self.txHistoryIndex = len(self.txHistory) - 1
+                    else:
+                        self.txHistoryIndex -= 1
+                    self.txInput.setText(self.txHistory[self.txHistoryIndex])
+                return
+
+            elif event.key() == Qt.Key.Key_Down:  # 아래 방향키 ↓
+                if self.txHistory and self.txHistoryIndex >= 0:
+                    self.txHistoryIndex += 1
+                    if self.txHistoryIndex >= len(self.txHistory):  # 마지막 이후면 빈 입력
+                        self.txHistoryIndex = -1
+                        self.txInput.clear()
+                    else:
+                        self.txInput.setText(self.txHistory[self.txHistoryIndex])
+                return
+        
+            elif event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
+                self.sendTxData()
+                return
+            
+            super(QLineEdit, self.txInput).keyPressEvent(event)  # 기본 동작 유지
+            return
+            
+                        
+        if self.rxData.hasFocus():
+            print("focusedrxData")
+            try:
+                if (event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter):
+                    self.txInput.setFocus()
+                    self.rxData.verticalScrollBar().setValue(self.rxData.verticalScrollBar().maximum())
+                else:
+                    QTextEdit.keyPressEvent(self.rxData, event)
+            except Exception as e:
+                logging.error(f"Error in handleKeyPress: {e}")
+        if self.filteredRxData.hasFocus():
+            print("focusedfilteredRxData")
+            try:
+                if (event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter):
+                    self.txInput.setFocus()
+                    self.rxData.verticalScrollBar().setValue(self.rxData.verticalScrollBar().maximum())
+                else:
+                    QTextEdit.keyPressEvent(self.filteredRxData, event)
+            except Exception as e:
+                logging.error(f"Error in handleKeyPress: {e}")
+                
+    ###
 
     # def focusTxInput(self, event):  # v2.0.3
     #     try:
@@ -546,6 +609,10 @@ class MainWindow(QMainWindow):
                 self.txInput.clear()
                 self.rxData.verticalScrollBar().setValue(self.rxData.verticalScrollBar().maximum()) # v2.0.3 Enter키 입력시 스크롤바 최하단으로 이동
                 # self.saveSettings()
+                if txData: #v4.0.5 #1
+                    self.txHistory.append(txData)
+                    self.txHistoryIndex = -1
+                    
         except Exception as e:
             logging.error(f"Error in sendTxData: {e}")
 
@@ -557,6 +624,7 @@ class MainWindow(QMainWindow):
                 self.serialPort.write(enterData.encode('utf-8')) # v3.0.0 Enter키 입력 추가
                 self.serialPort.write(txData.encode('utf-8'))
                 self.saveSettings()
+                logging.debug(f"Favorite data Saved: {txData}")
         except Exception as e:
             logging.error(f"Error in sendFavoriteData: {e}")
 
@@ -568,6 +636,7 @@ class MainWindow(QMainWindow):
             self.fontFamily = font.family()
             self.fontSize = font.pointSize()
             self.saveSettings()
+            logging.debug(f"Font Saved: {self.fontFamily}, {self.fontSize}")
             
     def showSystemFontDialog(self): # v4.0.4
         current_font = QApplication.font()
@@ -577,6 +646,7 @@ class MainWindow(QMainWindow):
             self.systemFontFamily = font.family()
             self.systemFontSize = font.pointSize()
             self.saveSettings()
+            logging.debug(f"System Font Saved: {self.systemFontFamily}, {self.systemFontSize}")
             self.updateFontForWidgets(self, font)
 
     def updateFontForWidgets(self, widget, font): # v4.0.4
@@ -648,7 +718,7 @@ class MainWindow(QMainWindow):
             cancelButton.clicked.connect(dialog.reject)
 
             dialog.setLayout(layout)
-            dialog.exec_()
+            dialog.exec()
         except Exception as e:
             logging.error(f"Error in showPreferencesDialog: {e}")
 
@@ -668,6 +738,7 @@ class MainWindow(QMainWindow):
             self.parity = self.parityComboBox.currentText()
             self.stopBits = self.stopBitsComboBox.currentText()
             self.saveSettings()
+            logging.debug(f'Preferences Saved. port : {self.port}, baudRate : {self.baudRate}, dataBits : {self.dataBits}, parity : {self.parity}, stopBits : {self.stopBits}')
             dialog.accept()
         except Exception as e:
             logging.error(f"Error in savePreferences: {e}")
@@ -681,12 +752,12 @@ class MainWindow(QMainWindow):
 
             self.canch_entry = QLineEdit(self)
             self.canch_entry.setPlaceholderText('Enter CAN Channel')
-            self.canch_entry.setText('1')
+            self.canch_entry.setText(self.canch_entry_value if self.canch_entry_value else '1')
             layout.addRow('CAN Channel:', self.canch_entry)
 
             self.bustype_entry = QComboBox(self)
             self.bustype_entry.addItems(['vector', 'kvaser'])
-            self.bustype_entry.setCurrentText('vector')
+            self.bustype_entry.setCurrentText(self.bustype_entry_value if self.bustype_entry_value else 'vector')
             layout.addRow('CAN Bus Type:', self.bustype_entry)
 
             buttonBox = QHBoxLayout()
@@ -702,15 +773,16 @@ class MainWindow(QMainWindow):
             cancelButton.clicked.connect(dialog.reject)
 
             dialog.setLayout(layout)
-            dialog.exec_()
+            dialog.exec()
         except Exception as e:
             logging.error(f"Error in showCANSettingsDialog: {e}")
 
     def saveCANSettings(self, dialog):
         try:
-            self.canch_entry.setText(self.canch_entry.text())
-            self.bustype_entry.setCurrentText(self.bustype_entry.currentText())
+            self.canch_entry_value = self.canch_entry.text()
+            self.bustype_entry_value = self.bustype_entry.currentText()
             self.saveSettings()
+            logging.debug(f'CAN Setting Saved. canch_entry_value : {self.canch_entry_value}, bustype_entry_value : {self.bustype_entry_value}')
             dialog.accept()
         except Exception as e:
             logging.error(f"Error in saveCANSettings: {e}")
@@ -768,7 +840,7 @@ class MainWindow(QMainWindow):
             cancelButton.clicked.connect(dialog.reject)
 
             dialog.setLayout(layout)
-            dialog.exec_()
+            dialog.exec()
         except Exception as e:
             logging.error(f"Error in showLogSettingsDialog: {e}")
 
@@ -801,6 +873,7 @@ class MainWindow(QMainWindow):
             
             self.autoLogging = self.autoLoggingCheckBox.isChecked()
             self.saveSettings()
+            logging.debug(f'Log Settings Saved. defaultLogFileName : {self.defaultLogFileName}, defaultLogFolderPath : {self.defaultLogFolderPath}, snapLogFileName : {self.snapLogFileName}, snapLogFolderPath : {self.snapLogFolderPath}, autoLogging : {self.autoLogging}')
             dialog.accept()
         except Exception as e:
             logging.error(f"Error in saveLogSettings: {e}")
@@ -837,8 +910,8 @@ class MainWindow(QMainWindow):
                 'theme': self.currentTheme,
                 'filter_count': self.filterCountInput.text(),
                 'filter_inputs': [(filterInput.text(), filterCheckBox.isChecked()) for filterInput, filterCheckBox in self.filterInputs],
-                'canch_entry': self.canch_entry.text(),
-                'bustype_entry': self.bustype_entry.currentText(),
+                'canch_entry': self.canch_entry_value,
+                'bustype_entry': self.bustype_entry_value,
                 'target_string_entry': self.MCULOGDetectCanTriggerDialog.target_string_entry.text(),
                 'ConfigurationCode_entry': self.MCULOGDetectCanTriggerDialog.ConfigurationCode_entry.text(),
                 'VIN_entry': self.MCULOGDetectCanTriggerDialog.VIN_entry.text(),
@@ -883,6 +956,13 @@ class MainWindow(QMainWindow):
                     self.move(int(settings.get('window_x', '0')), int(settings.get('window_y', '0')))
                     self.currentTheme = settings.get('theme', 'light')
                     self.filterCountInput.setText(settings.get('filter_count', '3'))
+                    self.canch_entry_value = settings.get('canch_entry', '1')
+                    self.bustype_entry_value = settings.get('bustype_entry', 'vector')
+                    self.MCULOGDetectCanTriggerDialog.target_string_entry.setText(settings.get('target_string_entry', ''))
+                    self.MCULOGDetectCanTriggerDialog.ConfigurationCode_entry.setText(settings.get('ConfigurationCode_entry', ''))
+                    self.MCULOGDetectCanTriggerDialog.VIN_entry.setText(settings.get('VIN_entry', ''))
+                    self.alertSettingsDialog.alertTextInput.setText(settings.get('alertTextInput', ''))
+                    self.alertSettingsDialog.alertTypeComboBox.setCurrentText(settings.get('alertTypeComboBox', 'Popup'))
                     filter_inputs = settings.get('filter_inputs', [])
                     if filter_inputs:
                         filter_inputs = eval(filter_inputs)
@@ -894,13 +974,6 @@ class MainWindow(QMainWindow):
                         else:
                             filterInput.setText('')
                             filterCheckBox.setChecked(True)
-                    self.canch_entry.setText(settings.get('canch_entry', '1'))
-                    self.bustype_entry.setCurrentText(settings.get('bustype_entry', 'vector'))
-                    self.MCULOGDetectCanTriggerDialog.target_string_entry.setText(settings.get('target_string_entry', ''))
-                    self.MCULOGDetectCanTriggerDialog.ConfigurationCode_entry.setText(settings.get('ConfigurationCode_entry', ''))
-                    self.MCULOGDetectCanTriggerDialog.VIN_entry.setText(settings.get('VIN_entry', ''))
-                    self.alertSettingsDialog.alertTextInput.setText(settings.get('alertTextInput', ''))
-                    self.alertSettingsDialog.alertTypeComboBox.setCurrentText(settings.get('alertTypeComboBox', 'Popup'))
                     self.applyFilters()  # 필터 적용
             else:
                 self.port = 'COM1'
@@ -1004,6 +1077,7 @@ class MainWindow(QMainWindow):
                         self.filteredRxData.append(line)
                 QApplication.processEvents()  # UI 업데이트를 위해 이벤트 처리
             self.saveSettings()
+            logging.debug("Filters applied.")
         except Exception as e:
             logging.error(f"Error in applyFilters: {e}")
 
@@ -1076,18 +1150,17 @@ class MainWindow(QMainWindow):
                 self.userScrolled_filter = False
         except Exception as e:
             logging.error(f"Error in handleScroll: {e}")
-
+            
     def saveLog(self):
         try:
-            logFileName = self.snapLogFileName
-            if '%' in logFileName:
-                logFileName = datetime.now().strftime(logFileName)
-            logFilePath = os.path.join(self.snapLogFolderPath, logFileName)
-            print(logFilePath)
-            with open(logFilePath, 'w') as file:
-                file.write(self.rxData.toPlainText())
+            filePath, _ = QFileDialog.getSaveFileName(self, "Save Rx Data", "", "Text Files (*.txt);;All Files (*)")
+            if filePath:
+                with open(filePath, 'w') as file:
+                    file.write(self.rxData.toPlainText())
+                QMessageBox.information(self, "Success", "Rx Data has been saved successfully.")
         except Exception as e:
             logging.error(f"Error in saveLog: {e}")
+            QMessageBox.critical(self, "Error", f"An error occurred while saving the data: {e}")
 
     def viewLogDirectory(self):
         try:
@@ -1105,6 +1178,7 @@ class MainWindow(QMainWindow):
     def saveWindowSettings(self, event):
         try:
             self.saveSettings()
+            logging.debug("Window settings saved.")
         except Exception as e:
             logging.error(f"Error in saveWindowSettings: {e}")
         event.accept()
@@ -1114,6 +1188,7 @@ class MainWindow(QMainWindow):
             if self.autoLogging and hasattr(self, 'autoLogFile'):
                 self.autoLogFile.close()
             self.saveSettings()
+            logging.debug("closeEvent Saved settings")
             if hasattr(self, 'serialPort') and self.serialPort.is_open:
                 self.serialPort.close()
             QApplication.quit()  # 명시적으로 QApplication 종료
@@ -1137,6 +1212,7 @@ class MainWindow(QMainWindow):
         self.currentTheme = theme
         self.applyTheme()
         self.saveSettings()
+        logging.debug(f'Saved Theme {theme}')
 
     def applyTheme(self):
         try:
@@ -1231,7 +1307,8 @@ class MainWindow(QMainWindow):
         try:
             version_info_lines = [
                 f"X-jera Term Version: {__version__}\n\n\n",
-                "v4.0.4:\n\n  #1_시스템 폰트 설정메뉴 추가\n\n",
+                "v5.0.0:\n\n  #1_GUI엔진 업그레이드(PyQt5->PyQt6)\n  #2_Filtered Rx Data Export 메뉴 추가\n  #3_AnsiCode 전체색변경으로 변경 \n  #4_키핸들링 로직변경\n\n",
+                "v4.0.4:\n\n  #1_시스템 폰트 설정메뉴 추가                                                   .\n\n",
                 "v4.0.3:\n\n  #1_Filtered Data Window 스크롤 이벤트 추가\n  #2_Info > visitGitHub추가\n\n",
                 "v4.0.2:\n\n  Filtered Rxdata Ansi 적용 및 로그에서 ansi 코드 제거후 저장 \n 스크롤 사이드 이슈 fix \n 테마변경 하위메뉴로 변경 \n\n",
                 "v4.0.1:\n\n  ModelSelect 삭제 ANSI Escape코드 적용 코드 추가 \n\n",
@@ -1253,10 +1330,23 @@ class MainWindow(QMainWindow):
             msg_box.setWindowTitle(f"Version Info__{__version__}")
             msg_box.setText(current_version_info)
             msg_box.setDetailedText(version_info)  # 세부 정보 추가
-            msg_box.setStandardButtons(QMessageBox.Ok)
-            msg_box.exec_()
+            msg_box.setStyleSheet("QLabel{min-width: 500px; font-size: 20px; font-weight: bold;}")  # 폰트 크기 및 굵기 조절
+            msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+
+            msg_box.exec()
         except Exception as e:
             logging.error(f"Error in showVersionInfo: {e}")
+
+    def exportFilteredData(self):
+        try:
+            filePath, _ = QFileDialog.getSaveFileName(self, "Save Filtered Rx Data", "", "Text Files (*.txt);;All Files (*)")
+            if filePath:
+                with open(filePath, 'w') as file:
+                    file.write(self.filteredRxData.toPlainText())
+                QMessageBox.information(self, "Success", "Filtered Rx Data has been exported successfully.")
+        except Exception as e:
+            logging.error(f"Error in exportFilteredData: {e}")
+            QMessageBox.critical(self, "Error", f"An error occurred while exporting the data: {e}")
 
     # v3.0.0 포커스 이동으로 Ctrl C 복사 기능 제한되어 롤백
     # def eventFilter(self, source, event): # v2.0.3 
@@ -1308,22 +1398,18 @@ if __name__ == '__main__':
         
         ##v4.0.4 소장님 컴퓨터 시스템 폰트 작아지는 문제 해결
         
-                # DPI 스케일링 활성화
-        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # Windows 8.1 이상 DPI 설정
-        
         app = QApplication(sys.argv)
-                # Qt의 고해상도 DPI 설정
-        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
-        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
+        # Qt의 고해상도 DPI 설정
+        app.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
         
                 # 기본 폰트 설정
-        default_font = QFontDatabase.systemFont(QFontDatabase.GeneralFont)
+        default_font = QFontDatabase.systemFont(QFontDatabase.SystemFont.GeneralFont)
         default_font.setPointSize(12)  # 원하는 크기로 조절
         app.setFont(default_font)
         
         mainWindow = MainWindow()
         mainWindow.show()
-        sys.exit(app.exec_())
+        sys.exit(app.exec())
     except Exception as e:
         logging.critical(f"Critical error: {e}")
         app.quit()  # 명시적으로 QApplication 종료
