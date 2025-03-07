@@ -9,11 +9,13 @@
 # CHANGELOG와 README 파일은 무시하지 않도록 포함
 !CHANGELOG.md
 !README.md
+!build.bat
 
-# src 디렉토리와 Xjeraterm은 무시하지 않도록 포함
+# src 디렉토리 포함 gittoken.py 파일만 제외
 !src/
-src/**
-!src/XjeraTerm.exe
+!src/**
+src/__pycache__
+src/gittoken.py
 
 
 # dist 디렉토리와 그 하위 파일들은 무시하지 않도록 포함
