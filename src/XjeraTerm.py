@@ -152,6 +152,14 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logging.error(f"Error in check_updates_on_startup: {e}")
 
+    def check_updates_on_manual(self):
+        try:
+            update_available = updatemanager.check_for_updates()
+            if not update_available:
+                QMessageBox.information(self, "업데이트 확인", "현 버전이 최신버전입니다.")
+        except Exception as e:
+            logging.error(f"Error in check_updates_on_manual: {e}")
+    
     def showReportDialog(self):
         try:
             """Report Dialog 생성"""
@@ -237,6 +245,8 @@ class MainWindow(QMainWindow):
                       
             # 추가 기능 메뉴
             AdditionalFeaturesmenu = menubar.addMenu('실험실')
+            
+            updatecheck = menubar.addAction('Check for Updates')
 
             # # 추가 기능 액션 생성
             mcuinformation = QAction('MCU Information', self)
@@ -317,6 +327,8 @@ class MainWindow(QMainWindow):
             visitGitHubAction = QAction('Visit GitHub', self)
             visitGitHubAction.triggered.connect(self.visitGitHub)
             info.addAction(visitGitHubAction)
+            
+            updatecheck.triggered.connect(self.check_updates_on_manual)
 
             # 메인 레이아웃 생성
             mainLayout = QHBoxLayout()
@@ -1307,6 +1319,7 @@ class MainWindow(QMainWindow):
         try:
             version_info_lines = [
                 f"X-jera Term Version: {__version__}\n\n\n",
+                "v5.0.1:\n\n  #1_UpdateCheck메뉴 추가\n  #2_설치프로그램적용배포\n\n",
                 "v5.0.0:\n\n  #1_GUI엔진 업그레이드(PyQt5->PyQt6)\n  #2_Filtered Rx Data Export 메뉴 추가\n  #3_AnsiCode 전체색변경으로 변경 \n  #4_키핸들링 로직변경\n\n",
                 "v4.0.4:\n\n  #1_시스템 폰트 설정메뉴 추가                                                   .\n\n",
                 "v4.0.3:\n\n  #1_Filtered Data Window 스크롤 이벤트 추가\n  #2_Info > visitGitHub추가\n\n",

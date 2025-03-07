@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import QMessageBox  # PyQt5 -> PyQt6
 from packaging import version  # version 비교를 위한 모듈 추가
 
 GITHUB_API_URL = "https://api.github.com/repos/byeonggonkang/XjeraTerm/releases/latest"
-CURRENT_VERSION = "v5.0.1"
+CURRENT_VERSION = "v5.0.0"
 
 def check_for_updates():
     try:
@@ -24,9 +24,7 @@ def check_for_updates():
                 if asset['name'].endswith(".exe"):
                     download_url = asset['browser_download_url']
                     prompt_update(latest_version, download_url)
-                    return True
-                else:
-                    return False
+                    return
     except Exception as e:
         print(f"Error checking for updates: {e}")
 
@@ -39,7 +37,7 @@ def prompt_update(latest_version, download_url):
 def download_and_install_update(download_url, latest_version):
     try:
         # 태그 이름 기반으로 새 EXE 경로 설정
-        exe_filename = "XjeraTermInstaller.exe"
+        exe_filename = f"XjeraTerm_{latest_version}.exe"
         new_exe_path = os.path.join(os.path.dirname(sys.executable), exe_filename)
 
         # EXE 파일 다운로드
@@ -52,8 +50,8 @@ def download_and_install_update(download_url, latest_version):
         # 업데이트 완료 메시지 표시
         QMessageBox.information(
             None,
-            "Installer Download Complete",
-            f"downloaded successfully.\n"
+            "Update Complete",
+            f"Update has been downloaded successfully.\n"
             f"The new file will now be executed:\n{new_exe_path}",
         )
 
@@ -64,4 +62,4 @@ def download_and_install_update(download_url, latest_version):
         sys.exit(0)
 
     except Exception as e:
-        QMessageBox.critical(None, "Download Failed", f"An error occurred while downloading: {e}")
+        QMessageBox.critical(None, "Update Failed", f"An error occurred while updating: {e}")
