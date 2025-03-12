@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import QMessageBox  # PyQt5 -> PyQt6
 from packaging import version  # version 비교를 위한 모듈 추가
 
 GITHUB_API_URL = "https://api.github.com/repos/byeonggonkang/XjeraTerm/releases/latest"
-CURRENT_VERSION = "v5.0.1"
+CURRENT_VERSION = "v5.0.2"
 
 def check_for_updates():
     try:

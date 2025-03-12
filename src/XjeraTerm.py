@@ -1,6 +1,6 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QMainWindow, QMenu, QVBoxLayout, QHBoxLayout, QWidget, QTextEdit, QLineEdit, QLabel, QSplitter, QFontDialog, QDialog, QFormLayout, QComboBox, QPushButton, QCheckBox, QGridLayout, QFileDialog, QMessageBox
-from PyQt6.QtGui import QFont, QIntValidator, QIcon, QFontDatabase, QAction
+from PyQt6.QtGui import QFont, QIntValidator, QIcon, QFontDatabase, QAction, QTextCursor
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
 import os
 import serial
@@ -92,6 +92,8 @@ class FilteredDataWindow(QMainWindow):
         event.accept()
 
 class MainWindow(QMainWindow):
+    MAX_LINES = 100000  # 최대 라인 수 제한 ## v5.0.2
+    REMOVE_LINES = 10000  # 제거할 라인 수 ## v5.0.2
 
     def __init__(self):
         super().__init__()
@@ -327,6 +329,11 @@ class MainWindow(QMainWindow):
             visitGitHubAction = QAction('Visit GitHub', self)
             visitGitHubAction.triggered.connect(self.visitGitHub)
             info.addAction(visitGitHubAction)
+            
+            #v5.0.2
+            viewSystemlog = QAction('View System Log', self)
+            viewSystemlog.triggered.connect(self.viewSystemLog)
+            info.addAction(viewSystemlog)
             
             updatecheck.triggered.connect(self.check_updates_on_manual)
 
@@ -1035,6 +1042,7 @@ class MainWindow(QMainWindow):
             )
             self.serialPort.flush()
             self.serialReaderThread = SerialReaderThread(self.serialPort, self.processedData)  # processedData 전달
+            logging.info(f"Serial port connected: {self.port} at {self.baudRate} baud")
             self.serialReaderThread.data_received.connect(self.updateRxData)
             self.serialReaderThread.start()
             if self.autoLogging:
@@ -1100,14 +1108,31 @@ class MainWindow(QMainWindow):
             self.buffer += data  # 기존 버퍼에 새로운 데이터 추가
             self.buffer = self.buffer.replace('\n\r', '\n')  # Windows 스타일 줄바꿈을 통일
             lines = self.buffer.split('\n')  # \n을 기준으로 데이터 나누기
+            formatted_text = "" ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+            filtered_text = "" ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+            self.rxData.setUpdatesEnabled(False)  # UI 업데이트 중지 (속도 향상) ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
             for line in lines[:-1]:
                 if line.strip():
-                    appendFormattedText(self.rxData, f'[{timestamp}] {line.strip()}\n')
-                    self.filteredData.append(f'[{timestamp}] {line.strip()}\n')  # 리스트에 추가
+                    formatted_line = f'[{timestamp}] {line.strip()}\n' ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+                    formatted_text += formatted_line ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+                    # appendFormattedText(self.rxData, f'[{timestamp}] {line.strip()}\n')
+                    # print(line)
+                    self.filteredData.append(formatted_line)  # 리스트에 추가 ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
                     if any(re.search(re.escape(filterInput.text()), line) and filterCheckBox.isChecked() for filterInput, filterCheckBox in self.filterInputs if filterInput.text() and filterCheckBox.isChecked()):
-                        appendFormattedText(self.filteredRxData, f'[{timestamp}] {line.strip()}\n')
-                        if not self.userScrolled_filter: #v4.0.3 
-                            self.filteredRxData.verticalScrollBar().setValue(self.filteredRxData.verticalScrollBar().maximum()) #v4.0.3 
+                        filtered_text += formatted_line ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+                        
+            if formatted_text:
+                appendFormattedText(self.rxData, formatted_text) ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+            if filtered_text:
+                appendFormattedText(self.filteredRxData, filtered_text) ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+                
+            self.rxData.setUpdatesEnabled(True)  # UI 업데이트 재개 (속도 향상) ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+            if formatted_text or filtered_text: ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+                QApplication.processEvents()  # UI 이벤트 강제처리 ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+            
+            if not self.userScrolled_filter: #v4.0.3 
+                self.filteredRxData.verticalScrollBar().setValue(self.filteredRxData.verticalScrollBar().maximum()) #v4.0.3 
+            
             self.buffer = lines[-1]  # 미완성 줄은 다시 버퍼에 저장
             # 자동 스크롤 제어
             if not self.userScrolled:
@@ -1122,6 +1147,20 @@ class MainWindow(QMainWindow):
                     self.autoLogFile.write(f'[{timestamp}] {logLine.strip()}\n')
                 self.autoLogBuffer = logLines[-1]
                 self.autoLogFile.flush()
+                
+            # 최대 줄 수 제한 ##v5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+            if self.rxData.document().blockCount() > self.MAX_LINES:
+                print(self.rxData.document().blockCount())
+                self.removeOldLines(self.rxData)
+                logging.info("Removed old lines.for rxData")
+            if self.filteredRxData.document().blockCount() > self.MAX_LINES:
+                self.removeOldLines(self.filteredRxData)
+                logging.info("Removed old lines.for filteredRxData")
+                
+            previous_block_count = self.rxData.document().blockCount()
+            if previous_block_count % 1000 == 0 and previous_block_count != 0:
+                print(previous_block_count)
+
         except Exception as e:
             logging.error(f"Error in updateRxData: {e}")
 
@@ -1135,11 +1174,11 @@ class MainWindow(QMainWindow):
         try:
             max_value = self.rxData.verticalScrollBar().maximum()
             if value < max_value:
-                print(f'right{self.userScrolled}')#v4.0.3 
+                # print(f'right{self.userScrolled}')#v4.0.3 
                 self.userScrolled = True
             else:
                 self.userScrolled = False
-                print(f'right{self.userScrolled}')#v4.0.3 
+                # print(f'right{self.userScrolled}')#v4.0.3 
         except Exception as e:
             logging.error(f"Error in handleScroll: {e}")
 
@@ -1155,13 +1194,22 @@ class MainWindow(QMainWindow):
         try:
             max_value = self.filteredRxData.verticalScrollBar().maximum()
             if value < max_value:
-                print(f'filter{self.userScrolled_filter}')
+                # print(f'filter{self.userScrolled_filter}')
                 self.userScrolled_filter = True
             else:
-                print(f'filter{self.userScrolled_filter}')
+                # print(f'filter{self.userScrolled_filter}')
                 self.userScrolled_filter = False
         except Exception as e:
             logging.error(f"Error in handleScroll: {e}")
+
+    # 최대 줄 수 제한 ##v5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+    def removeOldLines(self, textEdit):
+        cursor = textEdit.textCursor()
+        cursor.movePosition(cursor.MoveOperation.Start)
+        for _ in range(self.REMOVE_LINES):
+            cursor.movePosition(cursor.MoveOperation.Down, cursor.MoveMode.KeepAnchor)
+        cursor.removeSelectedText()
+        cursor.deleteChar()  # Remove the newline character
             
     def saveLog(self):
         try:
@@ -1186,6 +1234,21 @@ class MainWindow(QMainWindow):
                     subprocess.Popen(['xdg-open', log_dir])
         except Exception as e:
             logging.error(f"Error in viewLogDirectory: {e}")
+            
+    def viewSystemLog(self):
+        try:
+            if os.path.exists(log_file_path):
+                if sys.platform == 'win32':
+                    os.startfile(log_file_path)
+                elif sys.platform == 'darwin':
+                    subprocess.Popen(['open', log_file_path])
+                else:
+                    subprocess.Popen(['xdg-open', log_file_path])
+            else:
+                QMessageBox.warning(self, "Warning", "Log file does not exist.")
+        except Exception as e:
+            logging.error(f"Error in viewSystemLog: {e}")
+
 
     def saveWindowSettings(self, event):
         try:
@@ -1319,6 +1382,7 @@ class MainWindow(QMainWindow):
         try:
             version_info_lines = [
                 f"X-jera Term Version: {__version__}\n\n\n",
+                "v5.0.2:\n\n  #1 장기방치시 rxData GUI멈춤이슈 개선 코드 추가\n\n",
                 "v5.0.1:\n\n  #1_UpdateCheck메뉴 추가\n  #2_설치프로그램적용배포\n\n",
                 "v5.0.0:\n\n  #1_GUI엔진 업그레이드(PyQt5->PyQt6)\n  #2_Filtered Rx Data Export 메뉴 추가\n  #3_AnsiCode 전체색변경으로 변경 \n  #4_키핸들링 로직변경\n\n",
                 "v4.0.4:\n\n  #1_시스템 폰트 설정메뉴 추가                                                   .\n\n",
