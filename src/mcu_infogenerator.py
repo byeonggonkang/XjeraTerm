@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QPushButton, QTextEdit
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QPushButton, QTextEdit
 from can.interfaces.vector.exceptions import VectorInitializationError
 import can
 import CAN_Contents
@@ -38,14 +38,14 @@ class MCUinfomationDialog(QDialog):
     def refresh_info(self):
         mcu_info = get_mcu_information(self)
         self.text_box.setPlainText(
-        f"canch: {self.parent.canch_entry.text()}   "
-        f"bustype: {self.parent.bustype_entry.currentText()}\n"
+        f"canch: {self.parent.canch_entry_value}   "
+        f"bustype: {self.parent.bustype_entry_value}\n"
         f"Software Version Number: {mcu_info['software_version']}\n"
         f"HardWare Version Number: {mcu_info['hardware_version']}\n"
         f"Part Number: {mcu_info['part_number']}\n"
         f"Config Code: {mcu_info['config_code']}\n"
         f"Vin Number: {mcu_info['Vin_Number']}"
-    )
+        )
         
     def showEvent(self, event):
         super().showEvent(event)
@@ -72,8 +72,9 @@ def get_mcu_information(dialog):
     }
 
 def get_version_from_can(dialog, version_type):
-    can_ch = int(dialog.parent.canch_entry.text()) - 1
-    can_bustype = dialog.parent.bustype_entry.currentText()
+    can_ch = int(dialog.parent.canch_entry_value) - 1
+    can_bustype = dialog.parent.bustype_entry_value
+    print(can_ch, can_bustype)
 
     try:
         bus = can.interface.Bus(channel=can_ch, bustype=can_bustype, app_name='CANoe', bitrate=500000)

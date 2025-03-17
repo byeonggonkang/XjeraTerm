@@ -1,13 +1,13 @@
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QComboBox, QHBoxLayout, QPushButton, QMessageBox, QTextEdit
-from PyQt6.QtMultimedia import QSoundEffect
-from PyQt6 import QtCore
-from PyQt6.QtCore import QThread
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QComboBox, QHBoxLayout, QPushButton, QMessageBox, QTextEdit
+from PySide6.QtMultimedia import QSoundEffect
+from PySide6 import QtCore
+from PySide6.QtCore import QThread
 import threading
 import os
 import sys
 
 class AlertSettingsDialog(QDialog):
-    alertTriggered = QtCore.pyqtSignal(str)  # 팝업 발생 트리거 시그널 추가
+    alertTriggered = QtCore.Signal(str)  # 팝업 발생 트리거 시그널 추가
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -135,17 +135,17 @@ class AlertSettingsDialog(QDialog):
         if "Popup" in alertType :
             self.alertTriggered.emit(self.alertTextInput.text())  # 팝업 발생 트리거 시그널 발행
             # self.popup_shown = True
-            QtCore.QMetaObject.invokeMethod(self, "showPopup", QtCore.Qt.ConnectionType.QueuedConnection)  # 메인 스레드에서 팝업 호출
+            QtCore.QMetaObject.invokeMethod(self, "showPopup", QtCore.Qt.QueuedConnection)  # 메인 스레드에서 팝업 호출
         if "Beep" in alertType :
             # self.popup_shown = True
             self.alertSound.play()
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def showPopup(self):
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle("Alert")
         msg_box.setText(f"Alert Text '{self.alertTextInput.text()}' detected!")
-        msg_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg_box.setStandardButtons(QMessageBox.Ok)
         # msg_box.buttonClicked.connect(self.resetPopupFlag)
         msg_box.exec()
         if self.parent:

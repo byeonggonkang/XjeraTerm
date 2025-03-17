@@ -2,11 +2,11 @@ import os
 import sys
 import requests
 import subprocess
-from PyQt6.QtWidgets import QMessageBox  # PyQt5 -> PyQt6
+from PySide6.QtWidgets import QMessageBox  # PyQt6 -> PySide6
 from packaging import version  # version 비교를 위한 모듈 추가
 
 GITHUB_API_URL = "https://api.github.com/repos/byeonggonkang/XjeraTerm/releases/latest"
-CURRENT_VERSION = "v5.0.2"
+CURRENT_VERSION = "v5.0.3"
 
 def check_for_updates():
     try:
@@ -32,8 +32,8 @@ def check_for_updates():
 
 def prompt_update(latest_version, download_url):
     message = f"A new version {latest_version} is available. Do you want to update?"
-    reply = QMessageBox.question(None, "Update Available", message, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)  # PyQt6 호환
-    if reply == QMessageBox.StandardButton.Yes:  # PyQt6 호환
+    reply = QMessageBox.question(None, "Update Available", message, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)  # PySide6 호환
+    if reply == QMessageBox.StandardButton.Yes:  # PySide6 호환
         download_and_install_update(download_url, latest_version)  # latest_version 추가
 
 def download_and_install_update(download_url, latest_version):

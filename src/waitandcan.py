@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QFormLayout, QLineEdit, QPushButton, QTextEdit, QHBoxLayout, QLabel
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QFormLayout, QLineEdit, QPushButton, QTextEdit, QHBoxLayout, QLabel
 import threading
 import time
 import can
@@ -77,8 +77,8 @@ class MCULOGDetectCanTriggerDialog(QDialog):
 
     def send_can_messages(self, messages):
         try:
-            can_channel = int(self.parent.canch_entry.text()) - 1
-            bus = can.interface.Bus(channel=can_channel, bustype=self.parent.bustype_entry.currentText(), app_name='CANoe', bitrate=500000, fd=False)
+            can_channel = int(self.parent.canch_entry_value) - 1
+            bus = can.interface.Bus(channel=can_channel, bustype=self.parent.bustype_entry_value(), app_name='CANoe', bitrate=500000, fd=False)
             for msg in messages:
                 bus.send(msg)
                 print(msg)
@@ -202,8 +202,8 @@ class MCULOGDetectCanTriggerDialog(QDialog):
 
     def monitor_comport(self, target_string):
         self.log("Monitoring started.\n")
-        self.log(f'canch: {self.parent.canch_entry.text()}\n')
-        self.log(f'bustype: {self.parent.bustype_entry.currentText()}\n')
+        self.log(f'canch: {self.parent.canch_entry_value}\n')
+        self.log(f'bustype: {self.parent.bustype_entry_value}\n')
         while self.running:
             try:
                 processed_data = self.parent.getProcessedData()

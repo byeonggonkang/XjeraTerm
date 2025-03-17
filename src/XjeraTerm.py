@@ -1,7 +1,7 @@
 import sys
-from PyQt6.QtWidgets import QApplication, QMainWindow, QMenu, QVBoxLayout, QHBoxLayout, QWidget, QTextEdit, QLineEdit, QLabel, QSplitter, QFontDialog, QDialog, QFormLayout, QComboBox, QPushButton, QCheckBox, QGridLayout, QFileDialog, QMessageBox
-from PyQt6.QtGui import QFont, QIntValidator, QIcon, QFontDatabase, QAction, QTextCursor
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PySide6.QtWidgets import QApplication, QMainWindow, QMenu, QVBoxLayout, QHBoxLayout, QWidget, QTextEdit, QLineEdit, QLabel, QSplitter, QFontDialog, QDialog, QFormLayout, QComboBox, QPushButton, QCheckBox, QGridLayout, QFileDialog, QMessageBox, QLCDNumber
+from PySide6.QtGui import QFont, QIntValidator, QIcon, QFontDatabase, QAction, QTextCursor
+from PySide6.QtCore import Qt, QThread, Signal, QTimer
 import os
 import serial
 import serial.tools.list_ports
@@ -11,7 +11,6 @@ import subprocess
 import updatemanager
 import requests
 import gittoken
-# from PyQt6 import QtCore  # v2.0.3
 import ctypes  # Windows API를 사용하기 위해 추가 # v2.0.4
 from MCULOGDetectCanTrigger import MCULOGDetectCanTriggerDialog
 import logging
@@ -19,7 +18,6 @@ from AlertFunc import AlertSettingsDialog
 from mcu_infogenerator import MCUinfomationDialog
 from ANSI_Escapecode import appendFormattedText
 import webbrowser
-import ctypes
 
 # 디버그 로그 설정
 log_file_path = os.path.join(os.getenv('TEMP'), 'XjeraTerm_debug.log')
@@ -41,7 +39,7 @@ def resource_path(relative_path):
 
 class SerialReaderThread(QThread):
     
-    data_received = pyqtSignal(str)
+    data_received = Signal(str)
 
     def __init__(self, serialPort, processedData):
         super().__init__()
@@ -94,6 +92,7 @@ class FilteredDataWindow(QMainWindow):
 class MainWindow(QMainWindow):
     MAX_LINES = 100000  # 최대 라인 수 제한 ## v5.0.2
     REMOVE_LINES = 10000  # 제거할 라인 수 ## v5.0.2
+    filteredRxDatacount_value = 0  # v5.0.3 특정 스트링 카운트 추가
 
     def __init__(self):
         super().__init__()
@@ -383,13 +382,25 @@ class MainWindow(QMainWindow):
             filteredRxDataLayout.addWidget(self.showFilteredDataButton)
             filteredRxDataLayout.addWidget(self.clearFilteredDataButton)
             filteredRxDataLayout.addStretch()
-
+            self.leftLayout.addLayout(filteredRxDataLayout)
+            
+            filteredRxDatacountLayout = QHBoxLayout()
+            filteredRxDatacountLabel = QLabel('Count Characters:')
+            self.filteredRxDatacountString = QTextEdit(self)
+            self.filteredRxDatacountString.setMaximumHeight(30)
+            self.filteredRxDatacountString.setPlaceholderText("카운트할 문자열을 입력하세요")
+            self.filteredRxDatacount = QLCDNumber(self)
+            self.filteredRxDatacount.setStyleSheet("color: black; background: white;")
+            filteredRxDatacountLayout.addWidget(filteredRxDatacountLabel)
+            filteredRxDatacountLayout.addWidget(self.filteredRxDatacountString)
+            filteredRxDatacountLayout.addWidget(self.filteredRxDatacount)
+            # self.leftLayout.addLayout(filteredRxDatacountLayout)
+             
             self.filteredRxData = QTextEdit(self)
             self.filteredRxData.setReadOnly(True)
             self.leftLayout.addLayout(filteredRxDataLayout)
             self.leftLayout.addWidget(self.filteredRxData)
             self.filteredRxData.keyPressEvent = self.handleKeyPress  # RxData 영역에서 키 입력 처리 # v2.0.3
-
             for filterInput, filterCheckBox in self.filterInputs:
                 filterInput.textChanged.connect(self.applyFilters)
                 filterCheckBox.stateChanged.connect(self.applyFilters)
@@ -408,6 +419,7 @@ class MainWindow(QMainWindow):
             self.clearRxDataButton.clicked.connect(self.clearRxData)
             rxDataLayout.addWidget(rxDataLabel)
             rxDataLayout.addWidget(self.connectionStatusLabel)  # 연결 상태 레이블 추가
+            rxDataLayout.addLayout(filteredRxDatacountLayout)
             rxDataLayout.addWidget(self.clearRxDataButton)
             rightLayout.addLayout(rxDataLayout)
             rightLayout.addWidget(self.rxData)
@@ -439,7 +451,7 @@ class MainWindow(QMainWindow):
             rightWidget.setLayout(rightLayout)
             splitter.addWidget(leftWidget)
             splitter.addWidget(rightWidget)
-            splitter.setSizes([390, 910])  # 초기 크기를 3:7 비율로 설정
+            splitter.setSizes([410, 890])  # 초기 크기를 3:7 비율로 설정
             splitter.setStyleSheet("""
                 QSplitter::handle {
                     background-color: gray;
@@ -652,8 +664,8 @@ class MainWindow(QMainWindow):
         font, ok = QFontDialog.getFont(current_font, self)
         if ok:
             self.rxData.setFont(font)
-            self.fontFamily = font.family()
-            self.fontSize = font.pointSize()
+            self.filteredRxData.setFont(font)
+            self.txInput.setFont(font)
             self.saveSettings()
             logging.debug(f"Font Saved: {self.fontFamily}, {self.fontSize}")
             
@@ -662,8 +674,7 @@ class MainWindow(QMainWindow):
         font, ok = QFontDialog.getFont(current_font, self)
         if ok:
             QApplication.setFont(font)
-            self.systemFontFamily = font.family()
-            self.systemFontSize = font.pointSize()
+            self.updateFontForWidgets(self, font)
             self.saveSettings()
             logging.debug(f"System Font Saved: {self.systemFontFamily}, {self.systemFontSize}")
             self.updateFontForWidgets(self, font)
@@ -1108,27 +1119,35 @@ class MainWindow(QMainWindow):
             self.buffer += data  # 기존 버퍼에 새로운 데이터 추가
             self.buffer = self.buffer.replace('\n\r', '\n')  # Windows 스타일 줄바꿈을 통일
             lines = self.buffer.split('\n')  # \n을 기준으로 데이터 나누기
-            formatted_text = "" ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
-            filtered_text = "" ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
-            self.rxData.setUpdatesEnabled(False)  # UI 업데이트 중지 (속도 향상) ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+            # formatted_text = "" ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+            # filtered_text = "" ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+            # self.rxData.setUpdatesEnabled(False)  # UI 업데이트 중지 (속도 향상) ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
             for line in lines[:-1]:
                 if line.strip():
-                    formatted_line = f'[{timestamp}] {line.strip()}\n' ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
-                    formatted_text += formatted_line ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
-                    # appendFormattedText(self.rxData, f'[{timestamp}] {line.strip()}\n')
+                    # formatted_line = f'[{timestamp}] {line.strip()}\n' ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+                    # formatted_text += formatted_line ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+                    appendFormattedText(self.rxData, f'[{timestamp}] {line.strip()}\n')
                     # print(line)
-                    self.filteredData.append(formatted_line)  # 리스트에 추가 ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+                    # self.filteredData.append(formatted_line)  # 리스트에 추가 ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+                    self.filteredData.append(f'[{timestamp}] {line.strip()}')  # 리스트에 추가 ##RxData중복출력으로 인해 회귀
                     if any(re.search(re.escape(filterInput.text()), line) and filterCheckBox.isChecked() for filterInput, filterCheckBox in self.filterInputs if filterInput.text() and filterCheckBox.isChecked()):
-                        filtered_text += formatted_line ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+                        appendFormattedText(self.filteredRxData, f'[{timestamp}] {line.strip()}\n') ##RxData중복출력으로 인해 회귀
+                        # filtered_text += formatted_line ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+                        # filteredRxDatacountString이 감지되면 카운트 증가
                         
-            if formatted_text:
-                appendFormattedText(self.rxData, formatted_text) ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
-            if filtered_text:
-                appendFormattedText(self.filteredRxData, filtered_text) ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
-                
-            self.rxData.setUpdatesEnabled(True)  # UI 업데이트 재개 (속도 향상) ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
-            if formatted_text or filtered_text: ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
-                QApplication.processEvents()  # UI 이벤트 강제처리 ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+                    text = self.filteredRxDatacountString.toPlainText().strip()  # 앞뒤 공백 제거
+                    if text and text in line:  # 빈 문자열이 아닐 때만 비교
+                        self.filteredRxDatacount_value += 1
+                        self.filteredRxDatacount.display(self.filteredRxDatacount_value)  # QLCDNumber 업데이트
+                        
+            # if formatted_text:
+            #     appendFormattedText(self.rxData, formatted_text) ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+            # if filtered_text:
+            #     appendFormattedText(self.filteredRxData, filtered_text) ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+                                
+            # # self.rxData.setUpdatesEnabled(True)  # UI 업데이트 재개 (속도 향상) ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+            # if formatted_text or filtered_text: ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
+            #     QApplication.processEvents()  # UI 이벤트 강제처리 ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
             
             if not self.userScrolled_filter: #v4.0.3 
                 self.filteredRxData.verticalScrollBar().setValue(self.filteredRxData.verticalScrollBar().maximum()) #v4.0.3 
@@ -1156,10 +1175,6 @@ class MainWindow(QMainWindow):
             if self.filteredRxData.document().blockCount() > self.MAX_LINES:
                 self.removeOldLines(self.filteredRxData)
                 logging.info("Removed old lines.for filteredRxData")
-                
-            previous_block_count = self.rxData.document().blockCount()
-            if previous_block_count % 1000 == 0 and previous_block_count != 0:
-                print(previous_block_count)
 
         except Exception as e:
             logging.error(f"Error in updateRxData: {e}")
@@ -1301,8 +1316,12 @@ class MainWindow(QMainWindow):
                         background-color: #000000;
                         color: #ffffff;
                     }
-                    QTextEdit, QLineEdit, QLabel {
+                    QLineEdit, QLabel {
                         background-color: #000000;
+                        color: #ffffff;
+                    }
+                    QTextEdit{
+                        background-color: #1A1A1A;
                         color: #ffffff;
                     }
                     QPushButton, QComboBox {
@@ -1382,7 +1401,8 @@ class MainWindow(QMainWindow):
         try:
             version_info_lines = [
                 f"X-jera Term Version: {__version__}\n\n\n",
-                "v5.0.2:\n\n  #1 장기방치시 rxData GUI멈춤이슈 개선 코드 추가\n\n",
+                "v5.0.3:\n\n  #1_특정문자 카운트 기능 추가\n  #2_RxData중복 bug fix\n  #3_GUI엔진변경 상업적사용가능 모듈(PySide6)\n\n",
+                "v5.0.2:\n\n  #1_장기방치시 rxData GUI멈춤이슈 개선 코드 추가\n\n",
                 "v5.0.1:\n\n  #1_UpdateCheck메뉴 추가\n  #2_설치프로그램적용배포\n\n",
                 "v5.0.0:\n\n  #1_GUI엔진 업그레이드(PyQt5->PyQt6)\n  #2_Filtered Rx Data Export 메뉴 추가\n  #3_AnsiCode 전체색변경으로 변경 \n  #4_키핸들링 로직변경\n\n",
                 "v4.0.4:\n\n  #1_시스템 폰트 설정메뉴 추가                                                   .\n\n",
@@ -1436,9 +1456,13 @@ class MainWindow(QMainWindow):
 
     def showMCULOGDetectCanTriggerDialog(self):
         try:
+            print(self.canch_entry_value)
+            print(self.bustype_entry_value)
             logging.debug("Opening MCULOGDetectCanTriggerDialog")
             self.MCULOGDetectCanTriggerDialog = MCULOGDetectCanTriggerDialog(self)
             self.MCULOGDetectCanTriggerDialog.show()
+            if not hasattr(self, 'canch_entry_value') or not hasattr(self, 'bustype_entry_value'):
+                raise RuntimeError("CAN settings are not initialized.")
         except Exception as e:
             logging.error(f"Error in showMCULOGDetectCanTriggerDialog: {e}")
 
@@ -1452,10 +1476,12 @@ class MainWindow(QMainWindow):
 
     def showMCUInformationDialog(self):
         try:
+            print(self.canch_entry_value)
+            print(self.bustype_entry_value)
             logging.debug("Opening MCUInformationDialog")
             if self.MCUInformationDialog is None:
                 self.MCUInformationDialog = MCUinfomationDialog(self)  # 다이얼로그를 한 번만 생성
-            if not hasattr(self, 'canch_entry') or not hasattr(self, 'bustype_entry'):
+            if not hasattr(self, 'canch_entry_value') or not hasattr(self, 'bustype_entry_value'):
                 raise RuntimeError("CAN settings are not initialized.")
             self.MCUInformationDialog.show()
         except Exception as e:

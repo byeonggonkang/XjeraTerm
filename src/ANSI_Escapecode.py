@@ -1,5 +1,5 @@
 import re
-from PyQt6.QtGui import QTextCharFormat, QColor, QFont, QTextCursor
+from PySide6.QtGui import QTextCharFormat, QColor, QFont, QTextCursor
 
 def appendFormattedText(rxData, text):
     try:
