@@ -390,6 +390,7 @@ class MainWindow(QMainWindow):
             self.filteredRxDatacountString.setMaximumHeight(30)
             self.filteredRxDatacountString.setPlaceholderText("카운트할 문자열을 입력하세요")
             self.filteredRxDatacount = QLCDNumber(self)
+            self.filteredRxDatacount.setDigitCount(10)
             self.filteredRxDatacount.setStyleSheet("color: black; background: white;")
             filteredRxDatacountLayout.addWidget(filteredRxDatacountLabel)
             filteredRxDatacountLayout.addWidget(self.filteredRxDatacountString)
@@ -946,7 +947,8 @@ class MainWindow(QMainWindow):
                 'ConfigurationCode_entry': self.MCULOGDetectCanTriggerDialog.ConfigurationCode_entry.text(),
                 'VIN_entry': self.MCULOGDetectCanTriggerDialog.VIN_entry.text(),
                 'alertTextInput': self.alertSettingsDialog.alertTextInput.text(),
-                'alertTypeComboBox': self.alertSettingsDialog.alertTypeComboBox.currentText()
+                'alertTypeComboBox': self.alertSettingsDialog.alertTypeComboBox.currentText(),
+                'filteredRxDatacountString': self.filteredRxDatacountString.toPlainText()
             }
             with open(os.path.join(os.path.dirname(sys.executable), 'env_set.txt'), 'w') as file:
                 for key, value in settings.items():
@@ -993,6 +995,7 @@ class MainWindow(QMainWindow):
                     self.MCULOGDetectCanTriggerDialog.VIN_entry.setText(settings.get('VIN_entry', ''))
                     self.alertSettingsDialog.alertTextInput.setText(settings.get('alertTextInput', ''))
                     self.alertSettingsDialog.alertTypeComboBox.setCurrentText(settings.get('alertTypeComboBox', 'Popup'))
+                    self.filteredRxDatacountString.setPlainText(settings.get('filteredRxDatacountString', ''))
                     filter_inputs = settings.get('filter_inputs', [])
                     if filter_inputs:
                         filter_inputs = eval(filter_inputs)
@@ -1029,6 +1032,7 @@ class MainWindow(QMainWindow):
                 self.MCULOGDetectCanTriggerDialog.VIN_entry.setText('')
                 self.alertSettingsDialog.alertTextInput.setText('')
                 self.alertSettingsDialog.alertTypeComboBox.setCurrentText('Popup')
+                self.filteredRxDatacountString.setPlainText('')
 
                 for filterInput, filterCheckBox in self.filterInputs:
                     filterInput.setText('')
@@ -1139,6 +1143,11 @@ class MainWindow(QMainWindow):
                     if text and text in line:  # 빈 문자열이 아닐 때만 비교
                         self.filteredRxDatacount_value += 1
                         self.filteredRxDatacount.display(self.filteredRxDatacount_value)  # QLCDNumber 업데이트
+                        self.saveSettings()
+                    if text == '':
+                        self.filteredRxDatacount_value = 0
+                        self.filteredRxDatacount.display(self.filteredRxDatacount_value)
+                        self.saveSettings()
                         
             # if formatted_text:
             #     appendFormattedText(self.rxData, formatted_text) ##V5.0.2 #1 rxData GUI멈춤이슈 개선 코드
@@ -1401,6 +1410,7 @@ class MainWindow(QMainWindow):
         try:
             version_info_lines = [
                 f"X-jera Term Version: {__version__}\n\n\n",
+                "v5.0.4:\n\n  #1_특정문자 카운트 기능 최대치 증가\n 특정문자열카운트 입력칸 비울시 Count 초기화 기능 추가\n 특정문자열 1회이상 카운트 될 시 LastMemory 저장 \n\n",
                 "v5.0.3:\n\n  #1_특정문자 카운트 기능 추가\n  #2_RxData중복 bug fix\n  #3_GUI엔진변경 상업적사용가능 모듈(PySide6)\n\n",
                 "v5.0.2:\n\n  #1_장기방치시 rxData GUI멈춤이슈 개선 코드 추가\n\n",
                 "v5.0.1:\n\n  #1_UpdateCheck메뉴 추가\n  #2_설치프로그램적용배포\n\n",
