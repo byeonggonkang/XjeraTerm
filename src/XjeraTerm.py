@@ -40,7 +40,7 @@ def resource_path(relative_path):
 class SerialReaderThread(QThread):
     
     data_received = Signal(str)
-    disconnected = Signal()  # 연결 끊김 감지용 시그널 추가가
+    # disconnected = Signal()  # 연결 끊김 감지용 시그널 추가가
 
     def __init__(self, serialPort, processedData):
         super().__init__()
@@ -64,7 +64,7 @@ class SerialReaderThread(QThread):
                 logging.error(f"SerialException in SerialReaderThread: {e}")
                 self.serialPort.close()
                 self.data_received.emit(f'Error: {e}')
-                self.disconnected.emit()  # 연결 끊김 시그널 전송
+                # self.disconnected.emit()  # 연결 끊김 시그널 전송
                 break
                 
 
@@ -1061,23 +1061,23 @@ class MainWindow(QMainWindow):
             self.serialReaderThread = SerialReaderThread(self.serialPort, self.processedData)  # processedData 전달
             logging.info(f"Serial port connected: {self.port} at {self.baudRate} baud")
             self.serialReaderThread.data_received.connect(self.updateRxData)
-            self.serialReaderThread.disconnected.connect(self.handleSerialDisconnect)  # disconnected 시그널 연결 #v5.0.5
+            # self.serialReaderThread.disconnected.connect(self.handleSerialDisconnect)  # disconnected 시그널 연결 #v5.0.5
             self.serialReaderThread.start()
             if self.autoLogging:
                 self.startAutoLogging()
             self.showConnectionStatus(f'{self.port} CONNECTED.')
         except serial.SerialException as e:
             logging.error(f"Serial connection error: {e}")
-            self.rxData.append(f'⚠️ Error: {e}') #v5.0.5
+            # self.rxData.append(f'⚠️ Error: {e}') #v5.0.5
             self.rxData.append(f'⚠️ Please click "Reconnect COM Port" in the menu to reconnect.') #v5.0.5
         except Exception as e:
             logging.error(f"⚠️ Error in connectSerialPort: {e}") #v5.0.5
-#v5.0.5
-    def handleSerialDisconnect(self):
-        logging.warning("Serial port disconnected. Attempting to reconnect...")
-        self.showConnectionStatus(f"{self.port} DISCONNECTED. Reconnecting...")
-        self.rxData.append("⚠️ Serial port disconnected. Retrying connection...")
-        QTimer.singleShot(3000, self.reconnectSerialPort)  # 3초 후 재연결 시도
+# #v5.0.5
+#     def handleSerialDisconnect(self):
+#         logging.warning("Serial port disconnected. Attempting to reconnect...")
+#         self.showConnectionStatus(f"{self.port} DISCONNECTED. Reconnecting...")
+#         self.rxData.append("⚠️ Serial port disconnected. Retrying connection...")
+#         QTimer.singleShot(3000, self.reconnectSerialPort)  # 3초 후 재연결 시도
 #v5.0.5
 
     def showConnectionStatus(self, message):
@@ -1306,6 +1306,15 @@ class MainWindow(QMainWindow):
             logging.error(f"Error in closeEvent: {e}")
         event.accept()
 
+### V5.0.6 추가 ~ ###
+    def clearallbufferData(self):
+        try:
+            self.rxData.clear()
+            self.filteredRxData.clear()
+        except Exception as e:
+            logging.error(f"Error in clearallbufferData: {e}")
+### ~ V5.0.6 추가 ###
+            
     def clearRxData(self):
         try:
             self.rxData.clear()
@@ -1421,6 +1430,7 @@ class MainWindow(QMainWindow):
         try:
             version_info_lines = [
                 f"X-jera Term Version: {__version__}\n\n\n",
+                "v5.0.6:\n\n  #1_Comport 순단 Reconnect 기능 삭제\n 이외 잡 버그 개선\n\n",
                 "v5.0.5:\n\n  #1_Comport 순단 될 시 기존 Comport Reconnect 기능 추가\n\n",
                 "v5.0.4:\n\n  #1_특정문자 카운트 기능 최대치 증가\n 특정문자열카운트 입력칸 비울시 Count 초기화 기능 추가\n 특정문자열 1회이상 카운트 될 시 LastMemory 저장 \n\n",
                 "v5.0.3:\n\n  #1_특정문자 카운트 기능 추가\n  #2_RxData중복 bug fix\n  #3_GUI엔진변경 상업적사용가능 모듈(PySide6)\n\n",
